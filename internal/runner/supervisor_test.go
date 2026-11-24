@@ -162,6 +162,34 @@ func TestBuildServiceCmd(t *testing.T) {
 	assert.Equal(t, "redis", redisCmd.Service)
 	assert.Contains(t, redisCmd.Args, "--port")
 	assert.Contains(t, redisCmd.Args, "6379")
+
+	// Postgres command (with pre-existing PG_VERSION to avoid invoking initdb)
+	pgDataDir := filepath.Join(tempProject, ".stack", "data", "postgres")
+	require.NoError(t, os.MkdirAll(pgDataDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(pgDataDir, "PG_VERSION"), []byte("16\n"), 0o644))
+
+	pgCfg := config.ServiceConfig{
+		Name:    "postgres",
+		Port:    5432,
+		Version: "16.1.0",
+		User:    "postgres",
+	}
+	pgCmd, err := runner.BuildServiceCmd(context.Background(), pgCfg, filepath.Join(tempProject, "bin", "postgres"), tempProject)
+	require.NoError(t, err)
+	assert.Equal(t, "postgres", pgCmd.Service)
+	assert.Contains(t, pgCmd.Args, "-p")
+	assert.Contains(t, pgCmd.Args, "5432")
+	var hasLD, hasDYLD bool
+	for _, env := range pgCmd.Env {
+		if strings.HasPrefix(env, "LD_LIBRARY_PATH=") {
+			hasLD = true
+		}
+		if strings.HasPrefix(env, "DYLD_LIBRARY_PATH=") {
+			hasDYLD = true
+		}
+	}
+	assert.True(t, hasLD, "expected LD_LIBRARY_PATH in env")
+	assert.True(t, hasDYLD, "expected DYLD_LIBRARY_PATH in env")
 }
 
 func TestSupervisor_StartAndCancel(t *testing.T) {

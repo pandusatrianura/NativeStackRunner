@@ -179,6 +179,8 @@ func BuildServiceCmd(ctx context.Context, svc config.ServiceConfig, binPath, pro
 			return SpecCmd{}, err
 		}
 
+		libDir := filepath.Join(filepath.Dir(filepath.Dir(binPath)), "lib")
+
 		// Check if dataDir needs initialization (PG_VERSION check)
 		pgVersionFile := filepath.Join(dataDir, "PG_VERSION")
 		if _, err := os.Stat(pgVersionFile); os.IsNotExist(err) {
@@ -188,6 +190,10 @@ func BuildServiceCmd(ctx context.Context, svc config.ServiceConfig, binPath, pro
 				initdbPath += ".exe"
 			}
 			initCmd := exec.CommandContext(ctx, initdbPath, "-D", dataDir, "-U", svc.User, "-A", "trust")
+			initCmd.Env = append(os.Environ(),
+				fmt.Sprintf("LD_LIBRARY_PATH=%s:%s", libDir, os.Getenv("LD_LIBRARY_PATH")),
+				fmt.Sprintf("DYLD_LIBRARY_PATH=%s:%s", libDir, os.Getenv("DYLD_LIBRARY_PATH")),
+			)
 			initCmd.Dir = projectDir
 			if output, err := initCmd.CombinedOutput(); err != nil {
 				return SpecCmd{}, fmt.Errorf("running initdb: %w (output: %s)", err, string(output))
@@ -200,7 +206,6 @@ func BuildServiceCmd(ctx context.Context, svc config.ServiceConfig, binPath, pro
 		}
 
 		// Inject LD_LIBRARY_PATH on Linux / DYLD_LIBRARY_PATH on macOS
-		libDir := filepath.Join(filepath.Dir(filepath.Dir(binPath)), "lib")
 		spec.Env = append(spec.Env,
 			fmt.Sprintf("LD_LIBRARY_PATH=%s:%s", libDir, os.Getenv("LD_LIBRARY_PATH")),
 			fmt.Sprintf("DYLD_LIBRARY_PATH=%s:%s", libDir, os.Getenv("DYLD_LIBRARY_PATH")),
