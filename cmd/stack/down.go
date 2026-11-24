@@ -19,23 +19,24 @@ func newDownCmd() *cobra.Command {
 				return fmt.Errorf("listing active pids: %w", err)
 			}
 
+			out := cmd.OutOrStdout()
 			if len(pids) == 0 {
-				fmt.Println("No active services found for this project.")
+				fmt.Fprintln(out, "No active services found for this project.")
 				return nil
 			}
 
-			fmt.Println("Stopping services...")
+			fmt.Fprintln(out, "Stopping services...")
 			for service, pid := range pids {
 				if runner.IsProcessAlive(pid) {
 					if err := runner.StopProcess(pid); err != nil {
-						fmt.Printf("  - Failed to stop %s (PID %d): %v\n", service, pid, err)
+						fmt.Fprintf(out, "  - Failed to stop %s (PID %d): %v\n", service, pid, err)
 					} else {
-						fmt.Printf("  - Stopped %s (PID %d)\n", service, pid)
+						fmt.Fprintf(out, "  - Stopped %s (PID %d)\n", service, pid)
 					}
 				}
 				_ = runner.RemovePID(pidsDir, service)
 			}
-			fmt.Println("Done.")
+			fmt.Fprintln(out, "Done.")
 			return nil
 		},
 	}

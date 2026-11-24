@@ -18,6 +18,9 @@ func newCleanCmd() *cobra.Command {
 		Use:   "clean",
 		Short: "Delete local project data directory (.stack/data) for a clean database state",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
+			in := cmd.InOrStdin()
+
 			pidsDir := filepath.Join(projectDir, ".stack", "pids")
 			activePIDs, err := runner.ListActivePIDs(pidsDir)
 			if err == nil {
@@ -32,20 +35,20 @@ func newCleanCmd() *cobra.Command {
 			_, dataErr := os.Stat(dataDir)
 			_, pidsErr := os.Stat(pidsDir)
 			if os.IsNotExist(dataErr) && os.IsNotExist(pidsErr) {
-				fmt.Println("No project data or runtime directory found to clean.")
+				fmt.Fprintln(out, "No project data or runtime directory found to clean.")
 				return nil
 			}
 
 			if !force {
-				fmt.Print("Are you sure you want to delete local project database data (.stack/data)? [y/N]: ")
-				reader := bufio.NewReader(os.Stdin)
+				fmt.Fprint(out, "Are you sure you want to delete local project database data (.stack/data)? [y/N]: ")
+				reader := bufio.NewReader(in)
 				input, err := reader.ReadString('\n')
 				if err != nil {
 					return fmt.Errorf("reading confirmation input: %w", err)
 				}
 				input = strings.TrimSpace(strings.ToLower(input))
 				if input != "y" && input != "yes" {
-					fmt.Println("Clean operation canceled.")
+					fmt.Fprintln(out, "Clean operation canceled.")
 					return nil
 				}
 			}
@@ -60,7 +63,7 @@ func newCleanCmd() *cobra.Command {
 				_ = os.RemoveAll(pidsDir)
 			}
 
-			fmt.Println("Project data and runtime files (.stack/data, .stack/pids) removed successfully.")
+			fmt.Fprintln(out, "Cleaned local project data and runtime state.")
 			return nil
 		},
 	}

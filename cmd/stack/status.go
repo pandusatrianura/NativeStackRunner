@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"text/tabwriter"
 
@@ -22,7 +21,7 @@ func newStatusCmd() *cobra.Command {
 				return fmt.Errorf("reading service pids: %w", err)
 			}
 
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 3, ' ', 0)
 			fmt.Fprintln(w, "SERVICE\tPID\tSTATUS")
 			fmt.Fprintln(w, "-------\t---\t------")
 
