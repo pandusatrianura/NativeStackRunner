@@ -66,16 +66,17 @@ func newUpCmd() *cobra.Command {
 
 			slog.Info("configuration loaded", "name", cfg.Name, "services", len(cfg.Services))
 
+			out := cmd.OutOrStdout()
 			binMgr, err := binary.NewManager("", nil)
 			if err != nil {
 				return fmt.Errorf("initializing binary manager: %w", err)
 			}
-			binMgr.SetProgressOutput(os.Stdout)
+			binMgr.SetProgressOutput(out)
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			supervisor := runner.NewSupervisor(cfg, projectDir, binMgr, nil, os.Stdout)
+			supervisor := runner.NewSupervisor(cfg, projectDir, binMgr, nil, out)
 			return supervisor.Start(ctx)
 		},
 	}
