@@ -229,3 +229,30 @@ func TestUpCommand_ValidationErrors(t *testing.T) {
 		assert.Contains(t, err.Error(), "minio")
 	})
 }
+
+func TestVersionCommand_Output(t *testing.T) {
+	t.Run("version sub-command prints metadata", func(t *testing.T) {
+		cmd := newVersionCmd()
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&outBuf)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+		out := outBuf.String()
+		assert.Contains(t, out, "Native Stack Runner (stack) version")
+		assert.Contains(t, out, "Commit:")
+		assert.Contains(t, out, "OS/Arch:")
+	})
+
+	t.Run("root command accepts --version flag", func(t *testing.T) {
+		var outBuf bytes.Buffer
+		rootCmd.SetOut(&outBuf)
+		rootCmd.SetArgs([]string{"--version"})
+
+		err := rootCmd.Execute()
+		require.NoError(t, err)
+		assert.Contains(t, outBuf.String(), "stack version")
+		rootCmd.SetArgs(nil)
+	})
+}

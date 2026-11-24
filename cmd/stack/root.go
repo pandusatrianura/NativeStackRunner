@@ -11,6 +11,11 @@ import (
 var (
 	projectDir string
 	verbose    bool
+
+	// Version metadata injected at build time via ldflags
+	Version   = "dev"
+	Commit    = "none"
+	BuildDate = "unknown"
 )
 
 var rootCmd = &cobra.Command{
@@ -34,10 +39,14 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&projectDir, "dir", "d", cwd, "Target project directory containing stack.yaml")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose debug logging")
 
+	rootCmd.Version = Version
+	rootCmd.SetVersionTemplate("stack version {{.Version}}\n")
+
 	rootCmd.AddCommand(newUpCmd())
 	rootCmd.AddCommand(newDownCmd())
 	rootCmd.AddCommand(newStatusCmd())
 	rootCmd.AddCommand(newCleanCmd())
+	rootCmd.AddCommand(newVersionCmd())
 }
 
 func Execute() {

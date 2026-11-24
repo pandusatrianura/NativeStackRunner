@@ -18,6 +18,11 @@ builds:
     ldflags:
       - -s -w
       - -X github.com/pandusatrianura/NativeStackRunner/cmd/stack.Version={{.Version}}
+      - -X github.com/pandusatrianura/NativeStackRunner/cmd/stack.Commit={{.Commit}}
+      - -X github.com/pandusatrianura/NativeStackRunner/cmd/stack.BuildDate={{.Date}}
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      - -X main.BuildDate={{.Date}}
     goos:
       - linux
       - darwin
