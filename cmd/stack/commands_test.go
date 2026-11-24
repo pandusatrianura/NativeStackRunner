@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -296,5 +297,90 @@ func TestInitCommand_Scaffolding(t *testing.T) {
 		err := cmd.Execute()
 		require.NoError(t, err)
 		assert.Contains(t, outBuf.String(), "Initialized")
+	})
+}
+
+func TestEnvCommand_Output(t *testing.T) {
+	tempProject := t.TempDir()
+	origProjectDir := projectDir
+	defer func() { projectDir = origProjectDir }()
+	projectDir = tempProject
+
+	t.Run("fails when configuration is missing", func(t *testing.T) {
+		cmd := newEnvCmd()
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&outBuf)
+
+		err := cmd.Execute()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "configuration file not found")
+	})
+
+	// Create test configuration
+	configContent := `
+version: "1"
+name: test-env
+services:
+  postgres:
+    port: 5432
+    user: myuser
+    password: mypassword
+    database: mydb
+  redis:
+    port: 6379
+  minio:
+    port: 9000
+    access_key: admin
+    secret_key: secret
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tempProject, "stack.yaml"), []byte(configContent), 0o644))
+
+	t.Run("prints formatted environment variables by default", func(t *testing.T) {
+		cmd := newEnvCmd()
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&outBuf)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+		out := outBuf.String()
+		assert.Contains(t, out, "DATABASE_URL=\"postgres://myuser:mypassword@localhost:5432/mydb?sslmode=disable\"")
+		assert.Contains(t, out, "REDIS_URL=\"redis://localhost:6379\"")
+		assert.Contains(t, out, "S3_ENDPOINT=\"http://localhost:9000\"")
+	})
+
+	t.Run("formats with export prefix when flag provided", func(t *testing.T) {
+		cmd := newEnvCmd()
+		cmd.SetArgs([]string{"--export"})
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&outBuf)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+		out := outBuf.String()
+		assert.Contains(t, out, "export DATABASE_URL=")
+		assert.Contains(t, out, "export REDIS_URL=")
+		assert.Contains(t, out, "export S3_ENDPOINT=")
+	})
+
+	t.Run("formats as JSON map when flag provided", func(t *testing.T) {
+		cmd := newEnvCmd()
+		cmd.SetArgs([]string{"--json"})
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&outBuf)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+
+		var res map[string]string
+		err = json.Unmarshal(outBuf.Bytes(), &res)
+		require.NoError(t, err)
+		assert.Equal(t, "postgres://myuser:mypassword@localhost:5432/mydb?sslmode=disable", res["DATABASE_URL"])
+		assert.Equal(t, "redis://localhost:6379", res["REDIS_URL"])
+		assert.Equal(t, "http://localhost:9000", res["S3_ENDPOINT"])
+		assert.Equal(t, "admin", res["AWS_ACCESS_KEY_ID"])
 	})
 }
