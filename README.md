@@ -88,17 +88,29 @@ services:
 ### 2. Commands
 
 ```bash
+# Initialize a new stack.yaml template in the current project
+stack init
+
 # Start all dependencies with live log multiplexing
 stack up
+
+# Print ready-to-use connection strings & environment variables
+stack env
+eval $(stack env --export)    # Load directly into shell session
+stack env --json              # Output as JSON map
 
 # Check status of running services
 stack status
 
-# Stop all background services
+# Stop all running services
 stack down
 
 # Reset local data directory (.stack/data)
 stack clean --force
+
+# Check installed binary version and build metadata
+stack version
+stack --version
 ```
 
 ---
