@@ -1,0 +1,53 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test and coverage artifacts
+*.out
+coverage.html
+
+# Go workspace
+go.work
+
+# OS and Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Native Stack Runner runtime
+.stack/
+
+# AI Assistants & Agent Configurations
+.agents/
+.agentwork/
+.augment/
+.claude/
+.codebuddy/
+.codewhale/
+.codex/
+.continue/
+.cursor/
+.factory/
+.gemini/
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/*.yml
+.impeccable/
+.kilocode/
+.kiro/
+.opencode/
+.qoder/
+.roo/
+.schemas/
+.trae/
+.warp/
+.windsurf/
+
