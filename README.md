@@ -42,7 +42,19 @@
 
 ## 🛠️ Installation
 
-### Download Precompiled Binary
+### Homebrew (macOS & Linux)
+```bash
+brew tap pandusatrianura/tap
+brew install stack
+```
+
+### Scoop (Windows)
+```powershell
+scoop bucket add pandusatrianura https://github.com/pandusatrianura/scoop-bucket
+scoop install stack
+```
+
+### Standalone Precompiled Binary
 Download the precompiled archive for your OS from [GitHub Releases](https://github.com/pandusatrianura/NativeStackRunner/releases):
 - **Windows:** `stack_windows_amd64.zip`
 - **Linux:** `stack_linux_amd64.tar.gz` or `stack_linux_arm64.tar.gz`

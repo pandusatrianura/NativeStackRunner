@@ -52,6 +52,44 @@ checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
+brews:
+  - name: stack
+    repository:
+      owner: pandusatrianura
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    directory: Formula
+    homepage: "https://github.com/pandusatrianura/NativeStackRunner"
+    description: "Native Stack Runner (NSR) — Fast, containerless dependency manager"
+    license: "MIT"
+    install: |
+      bin.install "stack"
+    test: |
+      system "#{bin}/stack --version"
+    skip_upload: auto
+
+scoops:
+  - name: stack
+    repository:
+      owner: pandusatrianura
+      name: scoop-bucket
+      branch: main
+      token: "{{ .Env.SCOOP_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Scoop update for {{ .ProjectName }} version {{ .Tag }}"
+    directory: bucket
+    homepage: "https://github.com/pandusatrianura/NativeStackRunner"
+    description: "Native Stack Runner (NSR) — Fast, containerless dependency manager"
+    license: "MIT"
+    skip_upload: auto
+
 changelog:
   sort: asc
   filters:
