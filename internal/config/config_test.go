@@ -112,6 +112,16 @@ services:
 			errContains: "out of valid range",
 		},
 		{
+			name: "path traversal in service name is rejected",
+			yamlData: `
+services:
+  "../../evil":
+    port: 5432
+`,
+			wantErr:     true,
+			errContains: "contains invalid characters",
+		},
+		{
 			name:        "malformed yaml syntax",
 			yamlData:    `:::invalid yaml`,
 			wantErr:     true,

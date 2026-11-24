@@ -347,6 +347,16 @@ func applyDefaultServiceSettings(svc *ServiceConfig) {
 }
 
 func validateService(svc *ServiceConfig) error {
+	if svc.Name == "" {
+		return fmt.Errorf("%w: service name cannot be empty", ErrInvalidConfig)
+	}
+
+	for _, ch := range svc.Name {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-') {
+			return fmt.Errorf("%w: service name %q contains invalid characters (must be alphanumeric, hyphen, or underscore)", ErrInvalidConfig, svc.Name)
+		}
+	}
+
 	if svc.Port < 1 || svc.Port > 65535 {
 		return fmt.Errorf("%w: port %d out of valid range (1-65535)", ErrInvalidConfig, svc.Port)
 	}
