@@ -1,10 +1,13 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/pandusatrianura/NativeStackRunner/internal/config"
@@ -94,4 +97,21 @@ func TestBuildServiceCmd_PostgresVersionMismatch(t *testing.T) {
 	_, err := BuildServiceCmd(context.Background(), svc, "postgres", tempProject)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrIncompatiblePGVersion))
+}
+
+func TestSupervisor_PipeLogLargeLine(t *testing.T) {
+	var outBuf bytes.Buffer
+	s := NewSupervisor(nil, "", nil, nil, &outBuf)
+
+	// Line larger than default 64KB bufio.MaxScanTokenSize (100 KB)
+	largeContent := strings.Repeat("X", 100*1024)
+	r := strings.NewReader(largeContent + "\n")
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	s.pipeLog(r, "[test] ", &wg)
+	wg.Wait()
+
+	assert.Contains(t, outBuf.String(), "[test] ")
+	assert.Contains(t, outBuf.String(), largeContent)
 }

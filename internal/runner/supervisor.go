@@ -225,6 +225,8 @@ func (s *Supervisor) pipeLog(r io.Reader, prefix string, wg *sync.WaitGroup) {
 		return
 	}
 	scanner := bufio.NewScanner(r)
+	// Buffer up to 1MB per line (default 64KB causes silent abort and deadlock on large logs)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		_, _ = fmt.Fprintf(s.outputWriter, "%s%s\n", prefix, line)
