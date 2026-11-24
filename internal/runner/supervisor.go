@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -41,6 +42,7 @@ type Supervisor struct {
 	executor     ProcessExecutor
 	outputWriter io.Writer
 	cmdRunner    CmdRunner
+	httpClient   HTTPClient
 }
 
 // NewSupervisor instantiates a Supervisor for the given stack configuration and project directory.
@@ -58,12 +60,18 @@ func NewSupervisor(cfg *config.StackConfig, projectDir string, binMgr *binary.Ma
 		executor:     exec,
 		outputWriter: out,
 		cmdRunner:    DefaultCmdRunner,
+		httpClient:   &http.Client{Timeout: 5 * time.Second},
 	}
 }
 
 // SetCmdRunner sets the command runner for post-startup provisioning helpers.
 func (s *Supervisor) SetCmdRunner(r CmdRunner) {
 	s.cmdRunner = r
+}
+
+// SetHTTPClient sets the HTTP client for S3/API provisioning helpers.
+func (s *Supervisor) SetHTTPClient(c HTTPClient) {
+	s.httpClient = c
 }
 
 // Start boots all services in the stack, multiplexes logs, monitors child health, and terminates on ctx cancellation or crash.
@@ -191,6 +199,30 @@ func (s *Supervisor) postStartProvision(ctx context.Context, binPaths map[string
 				_, _ = fmt.Fprintf(s.outputWriter, "[postgres | %d] Warning: auto-creating database %q: %v\n", svc.Port, svc.Database, err)
 			} else {
 				_, _ = fmt.Fprintf(s.outputWriter, "[postgres | %d] Database %q verified/created.\n", svc.Port, svc.Database)
+			}
+		}
+
+		if name == "minio" && len(svc.Buckets) > 0 {
+			targetAddr := fmt.Sprintf("127.0.0.1:%d", svc.Port)
+			if err := WaitForTCPReady(ctx, targetAddr, 10*time.Second); err != nil {
+				_, _ = fmt.Fprintf(s.outputWriter, "[minio | %d] Warning: timeout waiting for MinIO connection: %v\n", svc.Port, err)
+				continue
+			}
+			endpoint := fmt.Sprintf("http://127.0.0.1:%d", svc.Port)
+			user := svc.AccessKey
+			if user == "" {
+				user = "minioadmin"
+			}
+			secret := svc.SecretKey
+			if secret == "" {
+				secret = "minioadmin"
+			}
+			for _, b := range svc.Buckets {
+				if err := EnsureMinIOBucket(ctx, s.httpClient, endpoint, user, secret, b); err != nil {
+					_, _ = fmt.Fprintf(s.outputWriter, "[minio | %d] Warning: auto-creating bucket %q: %v\n", svc.Port, b, err)
+				} else {
+					_, _ = fmt.Fprintf(s.outputWriter, "[minio | %d] S3 Bucket %q verified/created.\n", svc.Port, b)
+				}
 			}
 		}
 	}

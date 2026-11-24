@@ -141,6 +141,13 @@ func BuildServiceCmd(ctx context.Context, svc config.ServiceConfig, binPath, pro
 
 	switch svc.Name {
 	case "minio":
+		// Pre-create bucket directories in filesystem storage
+		for _, b := range svc.Buckets {
+			if b != "" {
+				_ = os.MkdirAll(filepath.Join(dataDir, b), 0o755)
+			}
+		}
+
 		// MinIO syntax: minio server <dataDir> --address :<port> --console-address :<consolePort>
 		consolePort := svc.ConsolePort
 		if consolePort == 0 {
