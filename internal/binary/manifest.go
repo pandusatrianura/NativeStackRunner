@@ -13,6 +13,7 @@ const (
 	ArchiveRaw   ArchiveType = "raw"
 	ArchiveZip   ArchiveType = "zip"
 	ArchiveTarGz ArchiveType = "tar.gz"
+	ArchiveTarXz ArchiveType = "tar.xz"
 )
 
 // Spec represents the metadata needed to download and locate a precompiled binary.

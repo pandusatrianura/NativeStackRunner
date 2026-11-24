@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/ulikunitz/xz"
 )
 
 // Manager coordinates checking the local cache, downloading, and extracting service binaries.
@@ -137,6 +139,11 @@ func (m *Manager) EnsureBinary(ctx context.Context, service, version string) (st
 		if err := extractTarGz(downloadPath, installDir); err != nil {
 			return "", fmt.Errorf("%w: %s", ErrExtractionFailed, err)
 		}
+
+	case ArchiveTarXz:
+		if err := extractTarXz(downloadPath, installDir); err != nil {
+			return "", fmt.Errorf("%w: %s", ErrExtractionFailed, err)
+		}
 	}
 
 	// Check if extracted binary exists
@@ -211,28 +218,26 @@ func extractZip(archivePath, targetDir string) error {
 		}
 	}
 
+	// Unpack nested .txz or .tar.xz archives if present (e.g. Zonky embedded-postgres JARs)
+	entries, readErr := os.ReadDir(targetDir)
+	if readErr == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && (strings.HasSuffix(entry.Name(), ".txz") || strings.HasSuffix(entry.Name(), ".tar.xz")) {
+				nestedPath := filepath.Join(targetDir, entry.Name())
+				if err := extractTarXz(nestedPath, targetDir); err != nil {
+					return fmt.Errorf("extracting nested xz archive %s: %w", entry.Name(), err)
+				}
+				_ = os.Remove(nestedPath)
+			}
+		}
+	}
+
 	return nil
 }
 
-// extractTarGz unpacks a .tar.gz archive safely.
-func extractTarGz(archivePath, targetDir string) error {
-	f, err := os.Open(archivePath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = f.Close()
-	}()
-
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = gz.Close()
-	}()
-
-	tr := tar.NewReader(gz)
+// extractTar unpacks a tar stream safely.
+func extractTar(reader io.Reader, targetDir string) error {
+	tr := tar.NewReader(reader)
 	targetDirClean := filepath.Clean(targetDir)
 
 	for {
@@ -270,10 +275,55 @@ func extractTarGz(archivePath, targetDir string) error {
 				return err
 			}
 			_ = out.Close()
+		case tar.TypeSymlink:
+			if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+				return err
+			}
+			_ = os.Remove(destPath)
+			_ = os.Symlink(hdr.Linkname, destPath)
 		}
 	}
 
 	return nil
+}
+
+// extractTarGz unpacks a .tar.gz archive safely.
+func extractTarGz(archivePath, targetDir string) error {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = gz.Close()
+	}()
+
+	return extractTar(gz, targetDir)
+}
+
+// extractTarXz unpacks a .tar.xz or .txz archive safely.
+func extractTarXz(archivePath, targetDir string) error {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	xzReader, err := xz.NewReader(f)
+	if err != nil {
+		return fmt.Errorf("creating xz reader: %w", err)
+	}
+
+	return extractTar(xzReader, targetDir)
 }
 
 // VerifyChecksum checks whether the file matches the expected SHA-256 hash string.

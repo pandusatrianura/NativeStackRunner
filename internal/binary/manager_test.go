@@ -1,6 +1,7 @@
 package binary_test
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
 	"context"
@@ -14,6 +15,7 @@ import (
 	"github.com/pandusatrianura/NativeStackRunner/internal/binary"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/ulikunitz/xz"
 )
 
 // mockDownloader implements binary.Downloader for isolated tests.
@@ -371,4 +373,68 @@ func TestVerifyChecksum(t *testing.T) {
 	err = binary.VerifyChecksum(filePath, "0000000000000000000000000000000000000000000000000000000000000000")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, binary.ErrChecksumMismatch)
+}
+
+func TestEnsureBinary_NestedXzInZip(t *testing.T) {
+	tempCache := t.TempDir()
+
+	binSubpath := "bin/postgres"
+	if runtime.GOOS == "windows" {
+		binSubpath = "bin/postgres.exe"
+	}
+
+	// 1. Create inner .txz archive
+	txzBuf := new(bytes.Buffer)
+	xzWriter, err := xz.NewWriter(txzBuf)
+	require.NoError(t, err)
+	tarWriter := tar.NewWriter(xzWriter)
+
+	mockContent := []byte("mock-embedded-postgres-binary")
+	err = tarWriter.WriteHeader(&tar.Header{
+		Name: binSubpath,
+		Mode: 0o755,
+		Size: int64(len(mockContent)),
+	})
+	require.NoError(t, err)
+	_, err = tarWriter.Write(mockContent)
+	require.NoError(t, err)
+	require.NoError(t, tarWriter.Close())
+	require.NoError(t, xzWriter.Close())
+
+	// 2. Wrap inner .txz into outer .zip (matching Zonky JAR structure)
+	zipBuf := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(zipBuf)
+	f, err := zipWriter.Create("postgres-windows-x86_64.txz")
+	require.NoError(t, err)
+	_, err = f.Write(txzBuf.Bytes())
+	require.NoError(t, err)
+	require.NoError(t, zipWriter.Close())
+
+	mockDL := &mockDownloader{payload: zipBuf.Bytes()}
+	mgr, err := binary.NewManager(tempCache, mockDL)
+	require.NoError(t, err)
+
+	mgr.SetManifest(&mockManifest{
+		spec: &binary.Spec{
+			Service:       "postgres",
+			Version:       "16.1.0",
+			Type:          binary.ArchiveZip,
+			BinarySubpath: binSubpath,
+			SHA256:        computeHash(mockDL.payload),
+		},
+	})
+
+	ctx := context.Background()
+	binPath, err := mgr.EnsureBinary(ctx, "postgres", "16")
+	require.NoError(t, err)
+	assert.FileExists(t, binPath)
+
+	// Ensure the extracted binary contains our payload
+	data, err := os.ReadFile(binPath)
+	require.NoError(t, err)
+	assert.Equal(t, mockContent, data)
+
+	// Verify the nested .txz file was cleaned up
+	nestedPath := filepath.Join(filepath.Dir(filepath.Dir(binPath)), "postgres-windows-x86_64.txz")
+	assert.NoFileExists(t, nestedPath)
 }
