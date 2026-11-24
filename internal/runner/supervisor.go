@@ -40,6 +40,7 @@ type Supervisor struct {
 	binaryMgr    *binary.Manager
 	executor     ProcessExecutor
 	outputWriter io.Writer
+	cmdRunner    CmdRunner
 }
 
 // NewSupervisor instantiates a Supervisor for the given stack configuration and project directory.
@@ -56,7 +57,13 @@ func NewSupervisor(cfg *config.StackConfig, projectDir string, binMgr *binary.Ma
 		binaryMgr:    binMgr,
 		executor:     exec,
 		outputWriter: out,
+		cmdRunner:    DefaultCmdRunner,
 	}
+}
+
+// SetCmdRunner sets the command runner for post-startup provisioning helpers.
+func (s *Supervisor) SetCmdRunner(r CmdRunner) {
+	s.cmdRunner = r
 }
 
 // Start boots all services in the stack, multiplexes logs, monitors child health, and terminates on ctx cancellation or crash.
@@ -94,6 +101,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 
 	var wg sync.WaitGroup
 	colorIdx := 0
+	binPaths := make(map[string]string)
 
 	for name, svc := range s.cfg.Services {
 		// 1. Ensure binary exists
@@ -102,6 +110,7 @@ func (s *Supervisor) Start(ctx context.Context) error {
 			rollback()
 			return fmt.Errorf("ensuring binary for %s: %w", name, err)
 		}
+		binPaths[name] = binPath
 
 		// 2. Build command spec
 		cmdSpec, err := BuildServiceCmd(ctx, svc, binPath, s.projectDir)
@@ -136,6 +145,9 @@ func (s *Supervisor) Start(ctx context.Context) error {
 
 	_, _ = fmt.Fprintf(s.outputWriter, "\nAll services launched successfully in project %s.\nPress Ctrl+C to stop.\n\n", s.projectDir)
 
+	// Post-startup provisioning (e.g. creating custom databases or buckets)
+	go s.postStartProvision(ctx, binPaths)
+
 	// Monitor child processes for unexpected exit/crash
 	exitCh := make(chan processExit, len(handles))
 	for _, h := range handles {
@@ -162,6 +174,25 @@ func (s *Supervisor) Start(ctx context.Context) error {
 		rollback()
 		s.drainLogs(&wg, 500*time.Millisecond)
 		return fmt.Errorf("service %q terminated unexpectedly: %w", exit.service, exit.err)
+	}
+}
+
+// postStartProvision handles automated post-startup configuration such as custom database or bucket creation.
+func (s *Supervisor) postStartProvision(ctx context.Context, binPaths map[string]string) {
+	for name, svc := range s.cfg.Services {
+		if name == "postgres" && svc.Database != "" && svc.Database != "postgres" {
+			targetAddr := fmt.Sprintf("127.0.0.1:%d", svc.Port)
+			if err := WaitForTCPReady(ctx, targetAddr, 10*time.Second); err != nil {
+				_, _ = fmt.Fprintf(s.outputWriter, "[postgres | %d] Warning: timeout waiting for database connection: %v\n", svc.Port, err)
+				continue
+			}
+			binPath := binPaths[name]
+			if err := EnsurePostgresDatabase(ctx, s.cmdRunner, binPath, svc.Port, svc.User, svc.Database, s.projectDir); err != nil {
+				_, _ = fmt.Fprintf(s.outputWriter, "[postgres | %d] Warning: auto-creating database %q: %v\n", svc.Port, svc.Database, err)
+			} else {
+				_, _ = fmt.Fprintf(s.outputWriter, "[postgres | %d] Database %q verified/created.\n", svc.Port, svc.Database)
+			}
+		}
 	}
 }
 
