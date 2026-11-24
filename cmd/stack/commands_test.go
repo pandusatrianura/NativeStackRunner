@@ -256,3 +256,45 @@ func TestVersionCommand_Output(t *testing.T) {
 		rootCmd.SetArgs(nil)
 	})
 }
+
+func TestInitCommand_Scaffolding(t *testing.T) {
+	tempProject := t.TempDir()
+	origProjectDir := projectDir
+	defer func() { projectDir = origProjectDir }()
+	projectDir = tempProject
+
+	t.Run("creates stack.yaml in empty directory", func(t *testing.T) {
+		cmd := newInitCmd()
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&outBuf)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+		assert.Contains(t, outBuf.String(), "Initialized")
+		assert.FileExists(t, filepath.Join(tempProject, "stack.yaml"))
+	})
+
+	t.Run("refuses to overwrite existing stack.yaml without force", func(t *testing.T) {
+		cmd := newInitCmd()
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&outBuf)
+
+		err := cmd.Execute()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "already exists")
+	})
+
+	t.Run("overwrites existing stack.yaml with force flag", func(t *testing.T) {
+		cmd := newInitCmd()
+		cmd.SetArgs([]string{"--force"})
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&outBuf)
+
+		err := cmd.Execute()
+		require.NoError(t, err)
+		assert.Contains(t, outBuf.String(), "Initialized")
+	})
+}
