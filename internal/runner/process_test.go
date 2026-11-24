@@ -1,0 +1,97 @@
+package runner
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/pandusatrianura/NativeStackRunner/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestExtractMajorVersion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"16.1.0", "16"},
+		{"15.5.0", "15"},
+		{"14", "14"},
+		{"  16.2  ", "16"},
+		{"", "16"}, // default
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, extractMajorVersion(tt.input))
+		})
+	}
+}
+
+func TestValidatePostgresDataVersion(t *testing.T) {
+	tempDir := t.TempDir()
+
+	t.Run("fresh directory without PG_VERSION succeeds", func(t *testing.T) {
+		freshDir := filepath.Join(tempDir, "fresh")
+		require.NoError(t, os.MkdirAll(freshDir, 0o755))
+
+		err := ValidatePostgresDataVersion(freshDir, "16.1.0")
+		assert.NoError(t, err)
+	})
+
+	t.Run("matching major version succeeds", func(t *testing.T) {
+		matchDir := filepath.Join(tempDir, "match16")
+		require.NoError(t, os.MkdirAll(matchDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(matchDir, "PG_VERSION"), []byte("16\n"), 0o644))
+
+		err := ValidatePostgresDataVersion(matchDir, "16.1.0")
+		assert.NoError(t, err)
+
+		// Also check with empty requested version (defaults to 16)
+		err = ValidatePostgresDataVersion(matchDir, "")
+		assert.NoError(t, err)
+	})
+
+	t.Run("matching major version 15 succeeds", func(t *testing.T) {
+		matchDir := filepath.Join(tempDir, "match15")
+		require.NoError(t, os.MkdirAll(matchDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(matchDir, "PG_VERSION"), []byte("15\n"), 0o644))
+
+		err := ValidatePostgresDataVersion(matchDir, "15.5.0")
+		assert.NoError(t, err)
+	})
+
+	t.Run("mismatched major version returns ErrIncompatiblePGVersion", func(t *testing.T) {
+		mismatchDir := filepath.Join(tempDir, "mismatch")
+		require.NoError(t, os.MkdirAll(mismatchDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(mismatchDir, "PG_VERSION"), []byte("15\n"), 0o644))
+
+		err := ValidatePostgresDataVersion(mismatchDir, "16.1.0")
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrIncompatiblePGVersion))
+		assert.Contains(t, err.Error(), "data directory at")
+		assert.Contains(t, err.Error(), "was initialized with PostgreSQL version 15, but configuration requested 16")
+		assert.Contains(t, err.Error(), "stack clean")
+	})
+}
+
+func TestBuildServiceCmd_PostgresVersionMismatch(t *testing.T) {
+	tempProject := t.TempDir()
+	dataDir := filepath.Join(tempProject, ".stack", "data", "postgres")
+	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "PG_VERSION"), []byte("14\n"), 0o644))
+
+	svc := config.ServiceConfig{
+		Name:    "postgres",
+		Port:    5432,
+		Version: "16.1.0",
+		User:    "postgres",
+	}
+
+	_, err := BuildServiceCmd(context.Background(), svc, "postgres", tempProject)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrIncompatiblePGVersion))
+}
