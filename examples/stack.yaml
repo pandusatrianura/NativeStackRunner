@@ -1,0 +1,24 @@
+version: "1"
+name: demo-stack
+
+services:
+  minio:
+    version: "latest"
+    port: 9000
+    console_port: 9001
+    access_key: minioadmin
+    secret_key: minioadmin
+    buckets:
+      - uploads
+      - avatars
+
+  redis:
+    version: "7"
+    port: 6379
+
+  postgres:
+    version: "16"
+    port: 5432
+    database: myapp_dev
+    user: postgres
+    password: password
