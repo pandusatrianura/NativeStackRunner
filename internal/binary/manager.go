@@ -20,7 +20,7 @@ import (
 type Manager struct {
 	cacheDir              string
 	downloader            Downloader
-	manifest              *Manifest
+	manifest              ManifestResolver
 	libcDetector          LibcDetector
 	enforceLinuxLibcCheck bool
 }
@@ -51,6 +51,11 @@ func NewManager(cacheDir string, dl Downloader) (*Manager, error) {
 // SetLibcDetector configures the C standard library detector (primarily for testing and overrides).
 func (m *Manager) SetLibcDetector(d LibcDetector) {
 	m.libcDetector = d
+}
+
+// SetManifest configures the manifest resolver (useful for testing).
+func (m *Manager) SetManifest(manifest ManifestResolver) {
+	m.manifest = manifest
 }
 
 // SetProgressOutput enables interactive progress reporting on the underlying downloader.
