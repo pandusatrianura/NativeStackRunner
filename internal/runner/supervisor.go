@@ -74,21 +74,66 @@ func (s *Supervisor) SetHTTPClient(c HTTPClient) {
 	s.httpClient = c
 }
 
-// Start boots all services in the stack, multiplexes logs, monitors child health, and terminates on ctx cancellation or crash.
-func (s *Supervisor) Start(ctx context.Context) error {
+// RunningStack represents an actively managed set of background processes in a stack.
+type RunningStack struct {
+	supervisor *Supervisor
+	handles    []runningHandle
+	pidsDir    string
+	binPaths   map[string]string
+	wg         sync.WaitGroup
+	ctx        context.Context
+	cancel     context.CancelFunc
+	exitCh     chan processExit
+}
+
+// Stop gracefully terminates all running processes in the stack and cleans up PID files.
+func (rs *RunningStack) Stop() {
+	rs.cancel()
+	for _, h := range rs.handles {
+		_ = h.handle.Kill()
+		_ = RemovePID(rs.pidsDir, h.service)
+	}
+	rs.supervisor.drainLogs(&rs.wg, 500*time.Millisecond)
+}
+
+// WaitReady blocks until all service ports accept TCP connections and post-start provisioning is complete.
+func (rs *RunningStack) WaitReady(ctx context.Context, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for name, svc := range rs.supervisor.cfg.Services {
+		targetAddr := fmt.Sprintf("127.0.0.1:%d", svc.Port)
+		remTime := time.Until(deadline)
+		if remTime <= 0 {
+			return fmt.Errorf("timeout waiting for %s on %s", name, targetAddr)
+		}
+		if err := WaitForTCPReady(ctx, targetAddr, remTime); err != nil {
+			return fmt.Errorf("waiting for %s on %s: %w", name, targetAddr, err)
+		}
+	}
+	// Run post-startup provisioning synchronously to guarantee custom database and buckets exist
+	rs.supervisor.postStartProvision(ctx, rs.binPaths)
+	return nil
+}
+
+// ExitChan returns a channel signaling unexpected process exits.
+func (rs *RunningStack) ExitChan() <-chan processExit {
+	return rs.exitCh
+}
+
+// StartAsync launches all services in the background and returns a RunningStack controller.
+func (s *Supervisor) StartAsync(parentCtx context.Context) (*RunningStack, error) {
 	// 0. Pre-flight check: ensure all declared service ports are available
 	if err := ValidateServicePorts(s.cfg.Services); err != nil {
-		return fmt.Errorf("pre-flight port check: %w", err)
+		return nil, fmt.Errorf("pre-flight port check: %w", err)
 	}
 
 	pidsDir := filepath.Join(s.projectDir, ".stack", "pids")
 	logsDir := filepath.Join(s.projectDir, ".stack", "logs")
 
 	if err := os.MkdirAll(pidsDir, 0o755); err != nil {
-		return fmt.Errorf("creating pids directory: %w", err)
+		return nil, fmt.Errorf("creating pids directory: %w", err)
 	}
 	if err := os.MkdirAll(logsDir, 0o755); err != nil {
-		return fmt.Errorf("creating logs directory: %w", err)
+		return nil, fmt.Errorf("creating logs directory: %w", err)
 	}
 
 	colors := []*color.Color{
@@ -107,31 +152,41 @@ func (s *Supervisor) Start(ctx context.Context) error {
 		}
 	}
 
-	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(parentCtx)
+	rs := &RunningStack{
+		supervisor: s,
+		pidsDir:    pidsDir,
+		binPaths:   make(map[string]string),
+		ctx:        ctx,
+		cancel:     cancel,
+	}
+
 	colorIdx := 0
-	binPaths := make(map[string]string)
 
 	for name, svc := range s.cfg.Services {
 		// 1. Ensure binary exists
 		binPath, err := s.binaryMgr.EnsureBinary(ctx, svc.Name, svc.Version)
 		if err != nil {
 			rollback()
-			return fmt.Errorf("ensuring binary for %s: %w", name, err)
+			cancel()
+			return nil, fmt.Errorf("ensuring binary for %s: %w", name, err)
 		}
-		binPaths[name] = binPath
+		rs.binPaths[name] = binPath
 
 		// 2. Build command spec
 		cmdSpec, err := BuildServiceCmd(ctx, svc, binPath, s.projectDir)
 		if err != nil {
 			rollback()
-			return fmt.Errorf("building command for %s: %w", name, err)
+			cancel()
+			return nil, fmt.Errorf("building command for %s: %w", name, err)
 		}
 
 		// 3. Start process
 		handle, stdout, stderr, err := s.executor.Start(ctx, cmdSpec)
 		if err != nil {
 			rollback()
-			return fmt.Errorf("starting process for %s: %w", name, err)
+			cancel()
+			return nil, fmt.Errorf("starting process for %s: %w", name, err)
 		}
 
 		handles = append(handles, runningHandle{service: name, handle: handle})
@@ -146,41 +201,50 @@ func (s *Supervisor) Start(ctx context.Context) error {
 		colorIdx++
 		prefix := serviceColor.Sprintf("[%s | %d] ", name, svc.Port)
 
-		wg.Add(2)
-		go s.pipeLog(stdout, prefix, &wg)
-		go s.pipeLog(stderr, prefix, &wg)
+		rs.wg.Add(2)
+		go s.pipeLog(stdout, prefix, &rs.wg)
+		go s.pipeLog(stderr, prefix, &rs.wg)
 	}
 
-	_, _ = fmt.Fprintf(s.outputWriter, "\nAll services launched successfully in project %s.\nPress Ctrl+C to stop.\n\n", s.projectDir)
-
-	// Post-startup provisioning (e.g. creating custom databases or buckets)
-	go s.postStartProvision(ctx, binPaths)
+	rs.handles = handles
+	rs.exitCh = make(chan processExit, len(handles))
 
 	// Monitor child processes for unexpected exit/crash
-	exitCh := make(chan processExit, len(handles))
 	for _, h := range handles {
 		hCopy := h
 		go func() {
 			waitErr := hCopy.handle.Wait()
 			// Only report if parent context has not initiated a planned shutdown
-			if ctx.Err() == nil {
-				exitCh <- processExit{service: hCopy.service, err: waitErr}
+			if rs.ctx.Err() == nil {
+				rs.exitCh <- processExit{service: hCopy.service, err: waitErr}
 			}
 		}()
 	}
 
+	return rs, nil
+}
+
+// Start boots all services in the stack, multiplexes logs, monitors child health, and terminates on ctx cancellation or crash.
+func (s *Supervisor) Start(ctx context.Context) error {
+	stack, err := s.StartAsync(ctx)
+	if err != nil {
+		return err
+	}
+	defer stack.Stop()
+
+	_, _ = fmt.Fprintf(s.outputWriter, "\nAll services launched successfully in project %s.\nPress Ctrl+C to stop.\n\n", s.projectDir)
+
+	// Post-startup provisioning (e.g. creating custom databases or buckets)
+	go s.postStartProvision(ctx, stack.binPaths)
+
 	select {
 	case <-ctx.Done():
 		_, _ = fmt.Fprintln(s.outputWriter, "\nShutting down services gracefully...")
-		rollback()
-		s.drainLogs(&wg, 500*time.Millisecond)
 		return nil
 
-	case exit := <-exitCh:
+	case exit := <-stack.exitCh:
 		errMsg := fmt.Sprintf("\n[ERROR] Service %q terminated unexpectedly (exit: %v). Shutting down all services...", exit.service, exit.err)
 		_, _ = fmt.Fprintln(s.outputWriter, errMsg)
-		rollback()
-		s.drainLogs(&wg, 500*time.Millisecond)
 		return fmt.Errorf("service %q terminated unexpectedly: %w", exit.service, exit.err)
 	}
 }

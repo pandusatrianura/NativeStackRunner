@@ -360,3 +360,66 @@ func TestSupervisor_PreflightPortConflict(t *testing.T) {
 	assert.ErrorIs(t, err, runner.ErrPortInUse)
 	assert.Empty(t, exec.startedCmds, "no processes should be launched when pre-flight fails")
 }
+
+func TestSupervisor_StartAsync_Lifecycle(t *testing.T) {
+	tempProject := t.TempDir()
+	tempCache := t.TempDir()
+
+	binMgr, err := binary.NewManager(tempCache, &mockDownloader{})
+	require.NoError(t, err)
+	binMgr.SetManifest(&mockManifest{})
+
+	// Spin up a mock listener to simulate the service port becoming ready
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+
+	parts := strings.Split(listener.Addr().String(), ":")
+	testPort, err := strconv.Atoi(parts[len(parts)-1])
+	require.NoError(t, err)
+
+	// Free the port before preflight check, and re-open it asynchronously to simulate service boot
+	_ = listener.Close()
+
+	cfg := &config.StackConfig{
+		Name: "test-stack",
+		Services: map[string]config.ServiceConfig{
+			"redis": {
+				Name: "redis",
+				Port: testPort,
+			},
+		},
+	}
+
+	exec := &mockExecutor{}
+	var outBuf bytes.Buffer
+	supervisor := runner.NewSupervisor(cfg, tempProject, binMgr, exec, &outBuf)
+
+	ctx := context.Background()
+	stack, err := supervisor.StartAsync(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, stack)
+
+	// Simulate service becoming ready
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", testPort))
+		if err == nil {
+			defer l.Close()
+			time.Sleep(300 * time.Millisecond)
+		}
+	}()
+
+	err = stack.WaitReady(ctx, 1*time.Second)
+	require.NoError(t, err)
+
+	pidsDir := filepath.Join(tempProject, ".stack", "pids")
+	activePIDs, err := runner.ListActivePIDs(pidsDir)
+	require.NoError(t, err)
+	assert.Contains(t, activePIDs, "redis")
+
+	// Call Stop and verify PIDs are cleaned up
+	stack.Stop()
+	activePIDsAfter, _ := runner.ListActivePIDs(pidsDir)
+	assert.Empty(t, activePIDsAfter)
+}
