@@ -1,6 +1,6 @@
-# Native Stack Runner (`stack`)
+# NativeStackRunner (`stack`)
 
-> Lightweight, containerless backend dependency runner for local development and CI.
+NativeStackRunner is an open-source command-line tool built with Go that provisions and executes backend services—specifically PostgreSQL, Redis, and MinIO—as native processes on your machine. It gives you the convenience of service management without the memory overhead, virtualization layers, or container daemons required by Docker.
 
 [![CI](https://github.com/pandusatrianura/NativeStackRunner/actions/workflows/ci.yml/badge.svg)](https://github.com/pandusatrianura/NativeStackRunner/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pandusatrianura/NativeStackRunner)](https://goreportcard.com/report/github.com/pandusatrianura/NativeStackRunner)
@@ -8,61 +8,66 @@
 
 ---
 
-## 🚀 Overview
+## Why NativeStackRunner?
 
-**Native Stack Runner (`stack`)** is a single-binary CLI tool written in Go that runs local backend dependency binaries (**PostgreSQL**, **Redis / Dragonfly**, **MinIO**) directly in user space, isolated per-project under `./.stack/`.
+Traditional local development often relies on container runtimes to spin up databases and caches. While containers offer isolation, they also introduce notable drawbacks on developer machines:
+- High idle RAM usage (often 2–4 GB for VM engines).
+- Slow boot times (several seconds per container).
+- Slower disk I/O when synchronizing files across virtualization boundaries.
 
-- **No Docker Desktop required:** Say goodbye to gigabytes of VM RAM usage, sluggish WSL2 file syncing, and daemon licensing issues.
-- **Fast Startup:** Native processes start in **< 150ms** compared to 3–10 seconds for container virtualization.
-- **Project Isolation:** Data, logs, and PID locks stay scoped to `<project-dir>/.stack/`.
-- **Zero Host Pollution:** Binaries are cached in `~/.stack/cache/bin/` with verified cryptographic SHA-256 checksums.
-
----
-
-## 🛡️ Production & Hardening Features
-
-- **Cryptographic SHA-256 Checksum Verification:** Validates every downloaded binary before extraction to prevent supply-chain tampering and corrupted partial downloads.
-- **Pre-flight Port Prober:** Probes TCP port availability on `127.0.0.1` before starting any process, catching port collisions upfront with actionable error messages.
-- **PostgreSQL Data Migration Guard:** Checks `.stack/data/postgres/PG_VERSION` before launch. If existing data belongs to PostgreSQL 15 and configuration requests 16, startup halts to prevent silent cluster corruption.
-- **Linux Libc Environment Detector:** Intelligently detects `glibc` vs `musl` (e.g. Alpine Linux) and advises `gcompat` installation for glibc-dependent PostgreSQL binaries.
-- **Interactive Terminal Progress Bar:** Dynamic rate-limited single-line progress indicator (`[service] [=========>      ] 45.0% (45.0 MB / 100.0 MB)`) that degrades gracefully in CI non-TTY environments.
-- **Child Crash Watcher & Startup Rollback:** If any service crashes unexpectedly, the supervisor terminates sibling processes and removes stale PID files automatically.
+NativeStackRunner solves this by downloading official standalone service binaries and managing them directly in user-space. Each project keeps its own isolated data and configuration inside a local `.stack` folder, booting in milliseconds on native host ports.
 
 ---
 
-## 📦 Supported Matrix
+## Key Capabilities
 
-| Service | Engine / Distribution | Supported Platforms |
+- **Sub-Second Process Startup:** PostgreSQL, Redis, and MinIO boot in less than 500 milliseconds.
+- **Project-Level Isolation:** Cluster data, log files, and process identifiers are stored locally in `.stack/` inside your project directory.
+- **Automatic Resource Provisioning:** Automatically initializes database clusters (`initdb`), creates custom databases, and creates pre-configured S3 buckets.
+- **Port Conflict Detection:** Pre-flight TCP verification prevents services from launching if a target port is already occupied.
+- **Integrity Validation:** Downloaded binaries are verified using cryptographic SHA-256 checksums before extraction.
+- **Ephemeral CI/CD Testing (`stack exec`):** Boots all declared dependencies, waits for health checks, executes your test command with auto-injected environment variables, and tears down cleanly with the test exit code.
+
+---
+
+## Supported Services
+
+| Service | Supported Versions | Supported Operating Systems |
 | :--- | :--- | :--- |
-| **PostgreSQL** | Zonky Embedded PostgreSQL (16.1.0, 15.5.0, 14.10.0) | Windows (amd64), Linux (amd64, arm64), macOS (amd64, arm64) |
-| **Redis** | Windows: Redis-x64 (5.0.14)<br>Linux/macOS: Dragonfly (1.14.0) | Windows (amd64), Linux (amd64, arm64), macOS (amd64, arm64) |
-| **MinIO** | MinIO Static Server (`RELEASE.2024-01-18T22-51-28Z`) | Windows (amd64), Linux (amd64, arm64), macOS (amd64, arm64) |
+| **PostgreSQL** | 16, 15, 14 | Windows (amd64), macOS (Apple Silicon & Intel), Linux (amd64 & arm64) |
+| **Redis** | 5.x / Dragonfly | Windows (amd64), macOS (Apple Silicon & Intel), Linux (amd64 & arm64) |
+| **MinIO (S3)** | Latest stable | Windows (amd64), macOS (Apple Silicon & Intel), Linux (amd64 & arm64) |
 
 ---
 
-## 🛠️ Installation
+## Installation
 
-### Homebrew (macOS & Linux)
+### Method 1: Homebrew (macOS & Linux)
+
 ```bash
-brew tap pandusatrianura/tap
+brew tap pandusatrianura/homebrew-tap
 brew install stack
 ```
 
-### Scoop (Windows)
+### Method 2: Scoop (Windows)
+
 ```powershell
 scoop bucket add pandusatrianura https://github.com/pandusatrianura/scoop-bucket
 scoop install stack
 ```
 
-### Standalone Precompiled Binary
-Download the precompiled archive for your OS from [GitHub Releases](https://github.com/pandusatrianura/NativeStackRunner/releases):
-- **Windows:** `stack_windows_amd64.zip`
-- **Linux:** `stack_linux_amd64.tar.gz` or `stack_linux_arm64.tar.gz`
-- **macOS:** `stack_darwin_arm64.tar.gz` (Apple Silicon) or `stack_darwin_amd64.tar.gz` (Intel)
+### Method 3: Go Install
 
-Extract and place `stack` (or `stack.exe`) in your system `$PATH`.
+```bash
+go install github.com/pandusatrianura/NativeStackRunner/cmd/stack@latest
+```
 
-### Build from Source
+### Method 4: Precompiled Binaries
+
+Download the appropriate archive for your operating system from the [Releases](https://github.com/pandusatrianura/NativeStackRunner/releases) page, extract the executable, and add it to your system PATH.
+
+### Method 5: Build From Source
+
 ```bash
 git clone https://github.com/pandusatrianura/NativeStackRunner.git
 cd NativeStackRunner
@@ -71,73 +76,123 @@ go build -o bin/stack ./cmd/stack
 
 ---
 
-## ⚡ Quickstart
+## How to Run NativeStackRunner
 
-### 1. Declare Dependencies (`stack.yaml`)
-Create `stack.yaml` in your project root:
+### Step 1: Initialize Configuration
+
+Navigate to your application folder and create a `stack.yaml` file by running:
+
+```bash
+stack init
+```
+
+This generates a template configuration in the current directory. You can customize the ports, versions, database name, and S3 buckets:
 
 ```yaml
 version: "1"
+name: my-app-stack
+
 services:
   postgres:
-    port: 5432
     version: "16"
-    user: "postgres"
-    database: "devdb"
+    port: 5432
+    database: myapp_dev
+    user: postgres
+    password: password
 
   redis:
+    version: "7"
     port: 6379
 
   minio:
+    version: "latest"
     port: 9000
     console_port: 9001
-    access_key: "minioadmin"
-    secret_key: "minioadmin"
+    access_key: minioadmin
+    secret_key: minioadmin
+    buckets:
+      - uploads
+      - avatars
 ```
 
-*(Note: `stack` also seamlessly supports existing `docker-compose.yml` files!)*
-
-### 2. Commands
-
-```bash
-# Initialize a new stack.yaml template in the current project
-stack init
-
-# Start all dependencies with live log multiplexing
-stack up
-
-# Print ready-to-use connection strings & environment variables
-stack env
-eval $(stack env --export)    # Load directly into shell session
-stack env --json              # Output as JSON map
-
-# Check status of running services
-stack status
-
-# Stop all running services
-stack down
-
-# Run ephemeral test suite with automatic dependency lifecycle and exit-code propagation
-stack exec -- go test -v ./...
-stack exec -- npm test
-stack exec -c test-stack.yaml --quiet -- pytest
-
-# Reset local data directory (.stack/data)
-stack clean --force
-
-# Check installed binary version and build metadata
-stack version
-stack --version
-```
+*(Note: NativeStackRunner also supports reading standard `docker-compose.yml` files out of the box).*
 
 ---
 
-## ⚡ CI/CD Accelerator (GitHub Actions)
+### Step 2: Start the Stack (`stack up`)
 
-NativeStackRunner eliminates the heavy Docker daemon and container startup latency in continuous integration pipelines:
+Start all declared services in your terminal:
+
+```bash
+stack up
+```
+
+What happens under the hood:
+1. Verifies that all required host ports (e.g. 5432, 6379, 9000) are free.
+2. Checks the local cache (`~/.cache/stack/bin`) for precompiled service binaries. Missing binaries are fetched and verified via SHA-256 automatically.
+3. Initializes the database cluster under `.stack/data/postgres` if it does not yet exist.
+4. Spawns each service and monitors logs in real time with distinct terminal color tags.
+5. Auto-creates custom databases (`myapp_dev`) and MinIO buckets (`uploads`, `avatars`).
+
+To stop services, press `Ctrl+C` in the running terminal, or run `stack down` from another window.
+
+---
+
+### Step 3: Inspect Service Health & Environment Variables
+
+Open another terminal in your project directory:
+
+```bash
+# View active service statuses and PIDs
+stack status
+
+# Print connection environment variables
+stack env
+
+# Export variables directly into your current shell
+eval $(stack env --export)
+
+# Or export in JSON format for scripting
+stack env --json
+```
+
+Default environment variables generated by `stack env`:
+- `DATABASE_URL=postgres://postgres:password@localhost:5432/myapp_dev?sslmode=disable`
+- `REDIS_URL=redis://localhost:6379`
+- `S3_ENDPOINT=http://localhost:9000`
+- `AWS_ACCESS_KEY_ID=minioadmin`
+- `AWS_SECRET_ACCESS_KEY=minioadmin`
+
+---
+
+### Step 4: Accelerated Testing in CI/CD (`stack exec`)
+
+When running automated test suites, you usually only need dependencies while tests execute. Use `stack exec` to handle the full lifecycle automatically:
+
+```bash
+# Run unit & integration tests
+stack exec -- go test -v ./...
+
+# Or for Node.js / Python projects
+stack exec -- npm test
+stack exec -- pytest
+
+# Quiet mode for CI logs
+stack exec --quiet -- npm test
+```
+
+`stack exec` operates in five phases:
+1. Launches dependencies in the background.
+2. Waits until all service TCP ports accept connections and auto-creates databases/buckets.
+3. Injects connection environment variables (`DATABASE_URL`, `REDIS_URL`, etc.) into the child process.
+4. Executes your command and captures its standard output, error, and return code.
+5. Shuts down all services cleanly without leaving zombie background processes.
+6. Exits with the exact return code of your test command.
+
+#### Example: GitHub Actions Workflow
 
 ```yaml
-name: Automated Integration Tests
+name: Test Suite
 on: [push, pull_request]
 
 jobs:
@@ -149,39 +204,72 @@ jobs:
         with:
           go-version: '1.22'
 
-      # Install NSR or build directly from source
-      - name: Install stack CLI
+      - name: Install NativeStackRunner
         run: go install github.com/pandusatrianura/NativeStackRunner/cmd/stack@latest
 
-      # Boots Postgres, Redis, MinIO, runs tests, and shuts down with test exit code
       - name: Run Test Suite
         run: stack exec --quiet -- go test -v ./...
 ```
 
 ---
 
-## 🗺️ Roadmap
+### Step 5: Maintenance & Data Reset
 
-- **v1.0 GA (Current):** The Golden Trio (PostgreSQL 14–16, Redis 5/Dragonfly, MinIO S3) + `stack exec` CI/CD runner.
-- **v1.1 (Next):** [Mailpit](https://github.com/axllent/mailpit) mock SMTP testing server and Web UI.
-- **v1.2 (Planned):** Portable standalone MySQL / MariaDB engine.
+- **Stop Running Services:**
+  ```bash
+  stack down
+  ```
+- **Reset Project Data:**
+  If you want to wipe local databases and start from a fresh state:
+  ```bash
+  stack clean --force
+  ```
+  *(Note: This deletes `.stack/data/` for the current project. Cached binaries in your home directory remain untouched).*
 
 ---
 
-## 🧪 Testing & CI
+## Directory Layout in Your Project
 
-```bash
-# Run all unit and integration tests
-go test -v ./...
+When running inside a project, NativeStackRunner creates a localized `.stack` directory:
 
-# Static analysis
-go vet ./...
-
-# Cross-compilation test
-GOOS=linux GOARCH=amd64 go build ./cmd/stack
+```
+my-project/
+├── stack.yaml              # Service configuration file
+├── .stack/                 # Created automatically (add to your .gitignore)
+│   ├── pids/               # Active process ID tracking files
+│   ├── logs/               # Individual service logs (postgres.log, redis.log, minio.log)
+│   └── data/               # Persistent database storage
+│       ├── postgres/       # PostgreSQL data cluster (PG_VERSION, base, etc.)
+│       └── minio/          # Stored S3 bucket objects
 ```
 
 ---
 
-## 📄 License
-MIT License.
+## CLI Command Reference
+
+| Command | Description |
+| :--- | :--- |
+| `stack init` | Generates a starter `stack.yaml` in the current working directory. |
+| `stack up` | Downloads missing binaries and starts all declared dependencies. |
+| `stack down` | Gracefully terminates all background services for the project. |
+| `stack status` | Displays process status, PIDs, and ports for the current stack. |
+| `stack env` | Outputs connection strings and environment variables for client libraries. |
+| `stack exec -- <cmd>` | Starts stack, executes command with injected env, and stops stack on exit. |
+| `stack clean` | Cleans the `.stack/data` directory to reset local state. |
+| `stack version` | Shows the current CLI binary version, git commit, and build date. |
+
+---
+
+## Contributing & Roadmap
+
+- **v1.0 GA (Current):** PostgreSQL 14–16, Redis / Dragonfly, MinIO S3, and `stack exec` test runner.
+- **v1.1 (Upcoming):** Mailpit lightweight SMTP email mocking server and web interface.
+- **v1.2 (Planned):** Standalone MySQL / MariaDB support.
+
+Pull requests and issue reports are welcome on [GitHub](https://github.com/pandusatrianura/NativeStackRunner).
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
