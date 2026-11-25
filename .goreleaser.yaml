@@ -52,6 +52,10 @@ checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
+release:
+  replace_existing_artifacts: true
+  replace_existing_draft: true
+
 brews:
   - name: stack
     repository:
