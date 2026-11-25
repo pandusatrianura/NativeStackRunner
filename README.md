@@ -42,21 +42,20 @@ NativeStackRunner solves this by downloading official standalone service binarie
 
 ## Installation
 
-### Method 1: Homebrew (macOS & Linux)
+### Homebrew (macOS & Linux)
 
 ```bash
-brew tap pandusatrianura/homebrew-tap
-brew install stack
+brew install pandusatrianura/tap/stack
 ```
 
-### Method 2: Scoop (Windows)
+### Scoop (Windows)
 
 ```powershell
 scoop bucket add pandusatrianura https://github.com/pandusatrianura/scoop-bucket
 scoop install stack
 ```
 
-### Method 3: Go Install
+### Go Install (Cross-Platform)
 
 ```bash
 go install github.com/pandusatrianura/NativeStackRunner/cmd/stack@latest
