@@ -49,6 +49,7 @@ func init() {
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newInitCmd())
 	rootCmd.AddCommand(newEnvCmd())
+	rootCmd.AddCommand(newExecCmd())
 }
 
 func Execute() {
