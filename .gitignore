@@ -24,6 +24,10 @@ Thumbs.db
 # Native Stack Runner runtime
 .stack/
 
+# Documentation & Local Artifacts
+artifacts/
+docs/
+
 # AI Assistants & Agent Configurations
 .agents/
 .agentwork/
