@@ -35,6 +35,11 @@ func TestBuildEnvEntries(t *testing.T) {
 					AccessKey: "customaccess",
 					SecretKey: "customsecret",
 				},
+				"mailpit": {
+					Name:   "mailpit",
+					Port:   1025,
+					UIPort: 8025,
+				},
 			},
 		}
 
@@ -66,10 +71,17 @@ func TestBuildEnvEntries(t *testing.T) {
 		assert.Equal(t, "http://localhost:9000", envMap["AWS_ENDPOINT_URL_S3"])
 		assert.Equal(t, "us-east-1", envMap["AWS_REGION"])
 
+		// Mailpit assertions
+		assert.Equal(t, "localhost", envMap["SMTP_HOST"])
+		assert.Equal(t, "1025", envMap["SMTP_PORT"])
+		assert.Equal(t, "http://localhost:8025", envMap["MAILPIT_URL"])
+		assert.Equal(t, "smtp://localhost:1025", envMap["MAILPIT_SMTP_URL"])
+
 		// Test slice format
 		slice := config.BuildEnvSlice(cfg)
 		assert.Contains(t, slice, "DATABASE_URL=postgres://myuser:secretpassword@localhost:5432/customdb?sslmode=disable")
 		assert.Contains(t, slice, "REDIS_URL=redis://localhost:6379")
 		assert.Contains(t, slice, "S3_ENDPOINT=http://localhost:9000")
+		assert.Contains(t, slice, "SMTP_PORT=1025")
 	})
 }

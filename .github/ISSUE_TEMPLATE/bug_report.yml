@@ -1,0 +1,87 @@
+name: 🐛 Bug Report
+description: Report an issue or unexpected behavior in NativeStackRunner
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue! Please check if an existing issue covers this bug before submitting.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the bug is.
+      placeholder: When running `stack up`, PostgreSQL fails to start...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System & Platform
+      description: Which OS and CPU architecture are you running NativeStackRunner on?
+      options:
+        - Windows (amd64 / x86_64)
+        - macOS (Apple Silicon arm64)
+        - macOS (Intel amd64)
+        - Linux (amd64 / x86_64)
+        - Linux (arm64 / aarch64)
+        - Other (specify in description)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: NativeStackRunner Version
+      description: Output of `stack version` or `stack --version`.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Your stack.yaml Configuration
+      description: Provide the contents of your `stack.yaml` (redacting any sensitive credentials).
+      render: yaml
+      placeholder: |
+        version: "1"
+        services:
+          postgres:
+            port: 5432
+            version: "16"
+    validations:
+      required: false
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Run 'stack init'
+        2. Modify stack.yaml with custom database name
+        3. Run 'stack up'
+        4. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal Output & Logs
+      description: Output from terminal or contents of `.stack/logs/<service>.log`.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true

@@ -58,6 +58,8 @@ func (m *Manifest) Resolve(service, version, targetOS, targetArch string) (*Spec
 		return resolveRedis(version, targetOS, targetArch)
 	case "postgres", "postgresql":
 		return resolvePostgres(version, targetOS, targetArch)
+	case "mailpit":
+		return resolveMailpit(version, targetOS, targetArch)
 	default:
 		return nil, fmt.Errorf("unknown service %q: %w", service, ErrUnsupportedPlatform)
 	}
@@ -221,5 +223,59 @@ func resolvePostgres(version, targetOS, targetArch string) (*Spec, error) {
 		Type:          ArchiveZip,
 		BinarySubpath: binSubpath,
 		SHA256:        hash,
+	}, nil
+}
+
+func resolveMailpit(version, targetOS, targetArch string) (*Spec, error) {
+	if version == "" || version == "latest" {
+		version = "v1.21.8"
+	}
+	if !strings.HasPrefix(version, "v") {
+		version = "v" + version
+	}
+
+	var assetName, sha256Hash string
+	var archiveType ArchiveType
+	binName := "mailpit"
+	if targetOS == "windows" {
+		binName = "mailpit.exe"
+	}
+
+	switch fmt.Sprintf("%s-%s", targetOS, targetArch) {
+	case "windows-amd64":
+		assetName = "mailpit-windows-amd64.zip"
+		archiveType = ArchiveZip
+		sha256Hash = "934dbd469da0f61ec7d1619e2d3c5a8c6179b7beab4a6d1900c3916ee2d547fb"
+	case "linux-amd64":
+		assetName = "mailpit-linux-amd64.tar.gz"
+		archiveType = ArchiveTarGz
+		sha256Hash = "0a75353c9e784d41189be7148d8b0e021f68e1bd7f29b521131b7cf50b396d97"
+	case "linux-arm64":
+		assetName = "mailpit-linux-arm64.tar.gz"
+		archiveType = ArchiveTarGz
+		sha256Hash = "63ff9a01a0382b266d724e523288d88d3fb32df326c265d112bf91de85900eec"
+	case "darwin-amd64":
+		assetName = "mailpit-darwin-amd64.tar.gz"
+		archiveType = ArchiveTarGz
+		sha256Hash = "92c48d6319d4940a040d46d7e8b1c420f7ed4bcf4eeba9b82ed1a9950d3012f1"
+	case "darwin-arm64":
+		assetName = "mailpit-darwin-arm64.tar.gz"
+		archiveType = ArchiveTarGz
+		sha256Hash = "9ebb052f1df754b895d4490d6823756a82c841b1b27fd843971cb2d4f3f3c132"
+	default:
+		return nil, fmt.Errorf("mailpit on %s/%s: %w", targetOS, targetArch, ErrUnsupportedPlatform)
+	}
+
+	url := fmt.Sprintf("https://github.com/axllent/mailpit/releases/download/%s/%s", version, assetName)
+
+	return &Spec{
+		Service:       "mailpit",
+		Version:       version,
+		OS:            targetOS,
+		Arch:          targetArch,
+		URL:           url,
+		Type:          archiveType,
+		BinarySubpath: binName,
+		SHA256:        sha256Hash,
 	}, nil
 }

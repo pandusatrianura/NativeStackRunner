@@ -199,6 +199,18 @@ func TestManifestResolve_AllPermutationsHaveChecksum(t *testing.T) {
 			})
 		}
 	}
+
+	// 4. Mailpit
+	for _, p := range platforms {
+		t.Run("mailpit_"+p.os+"_"+p.arch, func(t *testing.T) {
+			spec, err := manifest.Resolve("mailpit", "latest", p.os, p.arch)
+			require.NoError(t, err)
+			require.NotNil(t, spec)
+			assert.NotEmpty(t, spec.URL)
+			assert.NotEmpty(t, spec.BinarySubpath)
+			assert.Len(t, spec.SHA256, 64, "expected 64-char hex sha256")
+		})
+	}
 }
 
 func TestEnsureBinary_Raw(t *testing.T) {

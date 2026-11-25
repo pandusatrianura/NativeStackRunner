@@ -75,6 +75,23 @@ func BuildEnvEntries(cfg *StackConfig) []EnvEntry {
 		)
 	}
 
+	if mailpit, ok := cfg.Services["mailpit"]; ok {
+		smtpPort := mailpit.Port
+		if smtpPort == 0 {
+			smtpPort = 1025
+		}
+		uiPort := mailpit.UIPort
+		if uiPort == 0 {
+			uiPort = 8025
+		}
+		entries = append(entries,
+			EnvEntry{Service: "mailpit", Key: "SMTP_HOST", Value: "localhost"},
+			EnvEntry{Service: "mailpit", Key: "SMTP_PORT", Value: strconv.Itoa(smtpPort)},
+			EnvEntry{Service: "mailpit", Key: "MAILPIT_URL", Value: fmt.Sprintf("http://localhost:%d", uiPort)},
+			EnvEntry{Service: "mailpit", Key: "MAILPIT_SMTP_URL", Value: fmt.Sprintf("smtp://localhost:%d", smtpPort)},
+		)
+	}
+
 	return entries
 }
 

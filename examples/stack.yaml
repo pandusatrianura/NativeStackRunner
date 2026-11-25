@@ -22,3 +22,8 @@ services:
     database: myapp_dev
     user: postgres
     password: password
+
+  mailpit:
+    version: "latest"
+    port: 1025
+    ui_port: 8025

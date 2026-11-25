@@ -44,6 +44,10 @@ docs/
 !.github/workflows/
 .github/workflows/*
 !.github/workflows/*.yml
+!.github/ISSUE_TEMPLATE/
+.github/ISSUE_TEMPLATE/*
+!.github/ISSUE_TEMPLATE/*.yml
+!.github/pull_request_template.md
 .impeccable/
 .kilocode/
 .kiro/

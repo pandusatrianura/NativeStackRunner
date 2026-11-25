@@ -34,6 +34,11 @@ func ValidateServicePorts(services map[string]config.ServiceConfig) error {
 				return fmt.Errorf("pre-flight port check failed for service %q console: %w", name, err)
 			}
 		}
+		if svc.UIPort > 0 {
+			if err := CheckPortAvailable(svc.UIPort); err != nil {
+				return fmt.Errorf("pre-flight port check failed for service %q UI: %w", name, err)
+			}
+		}
 	}
 	return nil
 }

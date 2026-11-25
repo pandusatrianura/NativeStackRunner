@@ -36,7 +36,7 @@ without Docker Desktop, VMs, or complex Nix setups.`,
 
 func init() {
 	cwd, _ := os.Getwd()
-	rootCmd.PersistentFlags().StringVarP(&projectDir, "dir", "d", cwd, "Target project directory containing stack.yaml")
+	rootCmd.PersistentFlags().StringVarP(&projectDir, "dir", "C", cwd, "Target project directory containing stack.yaml")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose debug logging")
 
 	rootCmd.Version = Version

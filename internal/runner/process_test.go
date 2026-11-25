@@ -115,3 +115,24 @@ func TestSupervisor_PipeLogLargeLine(t *testing.T) {
 	assert.Contains(t, outBuf.String(), "[test] ")
 	assert.Contains(t, outBuf.String(), largeContent)
 }
+
+func TestBuildServiceCmd_Mailpit(t *testing.T) {
+	tempProject := t.TempDir()
+
+	svc := config.ServiceConfig{
+		Name:   "mailpit",
+		Port:   1025,
+		UIPort: 8025,
+	}
+
+	spec, err := BuildServiceCmd(context.Background(), svc, "mailpit", tempProject)
+	require.NoError(t, err)
+
+	assert.Equal(t, "mailpit", spec.Service)
+	assert.Equal(t, "mailpit", spec.BinPath)
+	assert.Contains(t, spec.Args, "--smtp-listen")
+	assert.Contains(t, spec.Args, "127.0.0.1:1025")
+	assert.Contains(t, spec.Args, "--listen")
+	assert.Contains(t, spec.Args, "127.0.0.1:8025")
+	assert.Contains(t, spec.Args, "--db-file")
+}

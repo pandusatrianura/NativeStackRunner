@@ -224,6 +224,105 @@ func (s *Supervisor) StartAsync(parentCtx context.Context) (*RunningStack, error
 	return rs, nil
 }
 
+// DetachedServiceInfo holds information about a service running in the background.
+type DetachedServiceInfo struct {
+	Service string
+	PID     int
+	Port    int
+	LogPath string
+}
+
+// StartDetached launches services in the background, redirects output to log files,
+// verifies readiness via TCP, provisions custom DB/buckets, and returns the list of started services.
+func (s *Supervisor) StartDetached(ctx context.Context) ([]DetachedServiceInfo, error) {
+	// 0. Pre-flight check: ensure all declared service ports are available
+	if err := ValidateServicePorts(s.cfg.Services); err != nil {
+		return nil, fmt.Errorf("pre-flight port check: %w", err)
+	}
+
+	pidsDir := filepath.Join(s.projectDir, ".stack", "pids")
+	logsDir := filepath.Join(s.projectDir, ".stack", "logs")
+
+	if err := os.MkdirAll(pidsDir, 0o755); err != nil {
+		return nil, fmt.Errorf("creating pids directory: %w", err)
+	}
+	if err := os.MkdirAll(logsDir, 0o755); err != nil {
+		return nil, fmt.Errorf("creating logs directory: %w", err)
+	}
+
+	var handles []runningHandle
+	rollback := func() {
+		for _, h := range handles {
+			_ = h.handle.Kill()
+			_ = RemovePID(pidsDir, h.service)
+		}
+	}
+
+	binPaths := make(map[string]string)
+	var startedServices []DetachedServiceInfo
+
+	for name, svc := range s.cfg.Services {
+		// 1. Ensure binary exists
+		binPath, err := s.binaryMgr.EnsureBinary(ctx, svc.Name, svc.Version)
+		if err != nil {
+			rollback()
+			return nil, fmt.Errorf("ensuring binary for %s: %w", name, err)
+		}
+		binPaths[name] = binPath
+
+		// 2. Build command spec
+		cmdSpec, err := BuildServiceCmd(ctx, svc, binPath, s.projectDir)
+		if err != nil {
+			rollback()
+			return nil, fmt.Errorf("building command for %s: %w", name, err)
+		}
+
+		// 3. Open log file
+		logFilePath := filepath.Join(logsDir, fmt.Sprintf("%s.log", name))
+		logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			rollback()
+			return nil, fmt.Errorf("opening log file for %s: %w", name, err)
+		}
+
+		// 4. Start detached process
+		handle, err := s.executor.StartDetached(cmdSpec, logFile)
+		_ = logFile.Close()
+		if err != nil {
+			rollback()
+			return nil, fmt.Errorf("starting detached process for %s: %w", name, err)
+		}
+
+		handles = append(handles, runningHandle{service: name, handle: handle})
+
+		// 5. Save PID
+		if err := SavePID(pidsDir, name, handle.PID()); err != nil {
+			_, _ = fmt.Fprintf(s.outputWriter, "Warning: failed to save PID for %s: %v\n", name, err)
+		}
+
+		startedServices = append(startedServices, DetachedServiceInfo{
+			Service: name,
+			PID:     handle.PID(),
+			Port:    svc.Port,
+			LogPath: logFilePath,
+		})
+	}
+
+	// 6. Wait for all services to become ready on their TCP ports
+	for _, info := range startedServices {
+		targetAddr := fmt.Sprintf("127.0.0.1:%d", info.Port)
+		if err := WaitForTCPReady(ctx, targetAddr, 30*time.Second); err != nil {
+			rollback()
+			return nil, fmt.Errorf("service %s (PID %d) did not become ready on port %d: %w", info.Service, info.PID, info.Port, err)
+		}
+	}
+
+	// 7. Run post-startup provisioning synchronously (custom database & buckets)
+	s.postStartProvision(ctx, binPaths)
+
+	return startedServices, nil
+}
+
 // Start boots all services in the stack, multiplexes logs, monitors child health, and terminates on ctx cancellation or crash.
 func (s *Supervisor) Start(ctx context.Context) error {
 	stack, err := s.StartAsync(ctx)

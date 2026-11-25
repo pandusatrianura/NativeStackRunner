@@ -69,6 +69,7 @@ services:
   postgres: {}
   redis: {}
   minio: {}
+  mailpit: {}
 `,
 			wantErr: false,
 			validate: func(t *testing.T, cfg *config.StackConfig) {
@@ -76,6 +77,8 @@ services:
 				assert.Equal(t, config.DefaultPostgresPort, cfg.Services["postgres"].Port)
 				assert.Equal(t, config.DefaultRedisPort, cfg.Services["redis"].Port)
 				assert.Equal(t, config.DefaultMinIOPort, cfg.Services["minio"].Port)
+				assert.Equal(t, config.DefaultMailpitPort, cfg.Services["mailpit"].Port)
+				assert.Equal(t, config.DefaultMailpitUIPort, cfg.Services["mailpit"].UIPort)
 			},
 		},
 		{

@@ -78,6 +78,20 @@ func (m *mockExecutor) Start(ctx context.Context, cmd runner.SpecCmd) (runner.Pr
 	return handle, stdout, stderr, nil
 }
 
+func (m *mockExecutor) StartDetached(cmd runner.SpecCmd, logFile *os.File) (runner.ProcessHandle, error) {
+	if m.failService != "" && cmd.Service == m.failService {
+		return nil, fmt.Errorf("simulated failure starting %s", cmd.Service)
+	}
+
+	m.startedCmds = append(m.startedCmds, cmd)
+	handle := &mockProcessHandle{
+		pid:    1000 + len(m.startedCmds),
+		waitCh: make(chan error, 1),
+	}
+	m.handles = append(m.handles, handle)
+	return handle, nil
+}
+
 type mockDownloader struct{}
 
 func (m *mockDownloader) Download(ctx context.Context, url string, destPath string) error {
@@ -422,4 +436,62 @@ func TestSupervisor_StartAsync_Lifecycle(t *testing.T) {
 	stack.Stop()
 	activePIDsAfter, _ := runner.ListActivePIDs(pidsDir)
 	assert.Empty(t, activePIDsAfter)
+}
+
+func TestSupervisor_StartDetached(t *testing.T) {
+	tempProject := t.TempDir()
+	tempCache := t.TempDir()
+
+	binMgr, err := binary.NewManager(tempCache, &mockDownloader{})
+	require.NoError(t, err)
+	binMgr.SetManifest(&mockManifest{})
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+
+	parts := strings.Split(listener.Addr().String(), ":")
+	testPort, err := strconv.Atoi(parts[len(parts)-1])
+	require.NoError(t, err)
+	_ = listener.Close()
+
+	cfg := &config.StackConfig{
+		Name: "test-stack-detached",
+		Services: map[string]config.ServiceConfig{
+			"redis": {
+				Name: "redis",
+				Port: testPort,
+			},
+		},
+	}
+
+	exec := &mockExecutor{}
+	var outBuf bytes.Buffer
+	supervisor := runner.NewSupervisor(cfg, tempProject, binMgr, exec, &outBuf)
+
+	// Spin up service listener asynchronously to simulate fast boot
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", testPort))
+		if err == nil {
+			defer l.Close()
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	ctx := context.Background()
+	detached, err := supervisor.StartDetached(ctx)
+	require.NoError(t, err)
+	require.Len(t, detached, 1)
+	assert.Equal(t, "redis", detached[0].Service)
+	assert.Equal(t, testPort, detached[0].Port)
+
+	pidsDir := filepath.Join(tempProject, ".stack", "pids")
+	activePIDs, err := runner.ListActivePIDs(pidsDir)
+	require.NoError(t, err)
+	assert.Contains(t, activePIDs, "redis")
+
+	// Verify Stop cleans up detached PIDs
+	err = supervisor.Stop()
+	require.NoError(t, err)
 }

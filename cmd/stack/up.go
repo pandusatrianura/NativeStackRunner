@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 
 	"github.com/pandusatrianura/NativeStackRunner/internal/binary"
 	"github.com/pandusatrianura/NativeStackRunner/internal/config"
@@ -17,7 +18,10 @@ import (
 )
 
 func newUpCmd() *cobra.Command {
-	var configFile string
+	var (
+		configFile string
+		detach     bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "up",
@@ -77,10 +81,31 @@ func newUpCmd() *cobra.Command {
 			defer stop()
 
 			supervisor := runner.NewSupervisor(cfg, projectDir, binMgr, nil, out)
+
+			if detach {
+				started, err := supervisor.StartDetached(ctx)
+				if err != nil {
+					return fmt.Errorf("starting stack in detached mode: %w", err)
+				}
+
+				fmt.Fprintf(out, "Native Stack Runner: %d services started in background (detached)\n\n", len(started))
+				w := tabwriter.NewWriter(out, 0, 0, 3, ' ', 0)
+				fmt.Fprintln(w, "  SERVICE\tPID\tPORT\tSTATUS\tLOG FILE")
+				for _, svc := range started {
+					fmt.Fprintf(w, "  %s\t%d\t%d\trunning\t%s\n", svc.Service, svc.PID, svc.Port, svc.LogPath)
+				}
+				_ = w.Flush()
+
+				fmt.Fprintln(out, "\nRun 'stack status' to inspect or 'stack down' to stop.")
+				fmt.Fprintln(out, "Run 'stack env' to view connection environment variables.")
+				return nil
+			}
+
 			return supervisor.Start(ctx)
 		},
 	}
 
 	cmd.Flags().StringVarP(&configFile, "config", "c", "", "Path to stack.yaml or docker-compose.yml")
+	cmd.Flags().BoolVarP(&detach, "detach", "d", false, "Run services in the background and return immediately")
 	return cmd
 }

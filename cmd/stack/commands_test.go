@@ -229,6 +229,18 @@ func TestUpCommand_ValidationErrors(t *testing.T) {
 		assert.Contains(t, err.Error(), "services are already running for this project")
 		assert.Contains(t, err.Error(), "minio")
 	})
+
+	t.Run("detach flag accepted by up command", func(t *testing.T) {
+		cmd := newUpCmd()
+		cmd.SetArgs([]string{"--detach"})
+		var outBuf bytes.Buffer
+		cmd.SetOut(&outBuf)
+		cmd.SetErr(&outBuf)
+
+		err := cmd.Execute()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "configuration file not found")
+	})
 }
 
 func TestVersionCommand_Output(t *testing.T) {

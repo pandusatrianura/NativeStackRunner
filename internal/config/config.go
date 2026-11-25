@@ -19,9 +19,11 @@ var (
 
 // Default service ports
 const (
-	DefaultPostgresPort = 5432
-	DefaultRedisPort    = 6379
-	DefaultMinIOPort    = 9000
+	DefaultPostgresPort  = 5432
+	DefaultRedisPort     = 6379
+	DefaultMinIOPort     = 9000
+	DefaultMailpitPort   = 1025
+	DefaultMailpitUIPort = 8025
 )
 
 // ServiceConfig defines configuration for an individual service dependency.
@@ -37,6 +39,7 @@ type ServiceConfig struct {
 	AccessKey   string            `yaml:"access_key,omitempty"`
 	SecretKey   string            `yaml:"secret_key,omitempty"`
 	Buckets     []string          `yaml:"buckets,omitempty"`
+	UIPort      int               `yaml:"ui_port,omitempty"`
 }
 
 // StackConfig represents the top-level configuration of Native Stack Runner.
@@ -257,6 +260,8 @@ func extractServiceAndVersion(name, image string) (string, string) {
 		return "redis", version
 	case strings.Contains(base, "minio"):
 		return "minio", version
+	case strings.Contains(base, "mailpit"):
+		return "mailpit", version
 	default:
 		return "", ""
 	}
@@ -323,6 +328,8 @@ func applyDefaultServiceSettings(svc *ServiceConfig) {
 			svc.Port = DefaultRedisPort
 		case "minio":
 			svc.Port = DefaultMinIOPort
+		case "mailpit":
+			svc.Port = DefaultMailpitPort
 		}
 	}
 
@@ -342,6 +349,10 @@ func applyDefaultServiceSettings(svc *ServiceConfig) {
 		}
 		if svc.SecretKey == "" {
 			svc.SecretKey = "minioadmin"
+		}
+	} else if svc.Name == "mailpit" {
+		if svc.UIPort == 0 {
+			svc.UIPort = DefaultMailpitUIPort
 		}
 	}
 }
@@ -363,6 +374,10 @@ func validateService(svc *ServiceConfig) error {
 
 	if svc.ConsolePort != 0 && (svc.ConsolePort < 1 || svc.ConsolePort > 65535) {
 		return fmt.Errorf("%w: console port %d out of valid range (1-65535)", ErrInvalidConfig, svc.ConsolePort)
+	}
+
+	if svc.UIPort != 0 && (svc.UIPort < 1 || svc.UIPort > 65535) {
+		return fmt.Errorf("%w: ui port %d out of valid range (1-65535)", ErrInvalidConfig, svc.UIPort)
 	}
 
 	return nil

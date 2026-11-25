@@ -68,6 +68,7 @@ type ProcessHandle interface {
 // ProcessExecutor abstracts the launching of operating system processes.
 type ProcessExecutor interface {
 	Start(ctx context.Context, cmd SpecCmd) (ProcessHandle, io.Reader, io.Reader, error)
+	StartDetached(spec SpecCmd, logFile *os.File) (ProcessHandle, error)
 }
 
 // OSProcessExecutor is the default OS-backed ProcessExecutor.
@@ -119,6 +120,29 @@ func (e *OSProcessExecutor) Start(ctx context.Context, spec SpecCmd) (ProcessHan
 	}
 
 	return &osProcessHandle{cmd: cmd}, stdoutPipe, stderrPipe, nil
+}
+
+// StartDetached launches a background process detached from the current console group with output redirected to logFile.
+func (e *OSProcessExecutor) StartDetached(spec SpecCmd, logFile *os.File) (ProcessHandle, error) {
+	cmd := exec.Command(spec.BinPath, spec.Args...)
+	cmd.Dir = spec.WorkDir
+
+	if len(spec.Env) > 0 {
+		cmd.Env = append(os.Environ(), spec.Env...)
+	}
+
+	if logFile != nil {
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+	}
+
+	setDetachedProcessGroup(cmd)
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("starting detached process %s: %w", spec.BinPath, err)
+	}
+
+	return &osProcessHandle{cmd: cmd}, nil
 }
 
 // BuildServiceCmd generates the execution spec for a specific service.
@@ -217,6 +241,18 @@ func BuildServiceCmd(ctx context.Context, svc config.ServiceConfig, binPath, pro
 			fmt.Sprintf("LD_LIBRARY_PATH=%s:%s", libDir, os.Getenv("LD_LIBRARY_PATH")),
 			fmt.Sprintf("DYLD_LIBRARY_PATH=%s:%s", libDir, os.Getenv("DYLD_LIBRARY_PATH")),
 		)
+
+	case "mailpit":
+		uiPort := svc.UIPort
+		if uiPort == 0 {
+			uiPort = 8025
+		}
+		dbFile := filepath.Join(dataDir, "mailpit.db")
+		spec.Args = []string{
+			"--smtp-listen", fmt.Sprintf("127.0.0.1:%d", svc.Port),
+			"--listen", fmt.Sprintf("127.0.0.1:%d", uiPort),
+			"--db-file", dbFile,
+		}
 
 	default:
 		return SpecCmd{}, fmt.Errorf("unsupported service %q", svc.Name)
