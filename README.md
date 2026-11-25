@@ -117,6 +117,11 @@ stack status
 # Stop all running services
 stack down
 
+# Run ephemeral test suite with automatic dependency lifecycle and exit-code propagation
+stack exec -- go test -v ./...
+stack exec -- npm test
+stack exec -c test-stack.yaml --quiet -- pytest
+
 # Reset local data directory (.stack/data)
 stack clean --force
 
@@ -124,6 +129,42 @@ stack clean --force
 stack version
 stack --version
 ```
+
+---
+
+## ⚡ CI/CD Accelerator (GitHub Actions)
+
+NativeStackRunner eliminates the heavy Docker daemon and container startup latency in continuous integration pipelines:
+
+```yaml
+name: Automated Integration Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      # Install NSR or build directly from source
+      - name: Install stack CLI
+        run: go install github.com/pandusatrianura/NativeStackRunner/cmd/stack@latest
+
+      # Boots Postgres, Redis, MinIO, runs tests, and shuts down with test exit code
+      - name: Run Test Suite
+        run: stack exec --quiet -- go test -v ./...
+```
+
+---
+
+## 🗺️ Roadmap
+
+- **v1.0 GA (Current):** The Golden Trio (PostgreSQL 14–16, Redis 5/Dragonfly, MinIO S3) + `stack exec` CI/CD runner.
+- **v1.1 (Next):** [Mailpit](https://github.com/axllent/mailpit) mock SMTP testing server and Web UI.
+- **v1.2 (Planned):** Portable standalone MySQL / MariaDB engine.
 
 ---
 
