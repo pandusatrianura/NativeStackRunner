@@ -27,9 +27,9 @@ func TestBuildMailpitCmd(t *testing.T) {
 
 		expectedDB := filepath.Join(tempProject, ".stack", "data", "mailpit", "mailpit.db")
 		expectedArgs := []string{
-			"--smtp-listen", "127.0.0.1:1025",
+			"--smtp", "127.0.0.1:1025",
 			"--listen", "127.0.0.1:8025",
-			"--db-file", expectedDB,
+			"--database", expectedDB,
 		}
 		assert.Equal(t, expectedArgs, spec.Args)
 		assert.DirExists(t, filepath.Join(tempProject, ".stack", "data", "mailpit"))
@@ -50,9 +50,9 @@ func TestBuildMailpitCmd(t *testing.T) {
 
 		expectedDB := filepath.Join(tempProject, ".stack", "data", "mailpit", "mailpit.db")
 		expectedArgs := []string{
-			"--smtp-listen", "127.0.0.1:2525",
+			"--smtp", "127.0.0.1:2525",
 			"--listen", "127.0.0.1:9025",
-			"--db-file", expectedDB,
+			"--database", expectedDB,
 		}
 		assert.Equal(t, expectedArgs, spec.Args)
 		assert.Contains(t, spec.Env, "MP_MAX_MESSAGES=500")

@@ -30,9 +30,9 @@ func BuildMailpitCmd(binPath string, svc config.ServiceConfig, projectDir string
 		BinPath: binPath,
 		WorkDir: projectDir,
 		Args: []string{
-			"--smtp-listen", fmt.Sprintf("127.0.0.1:%d", port),
+			"--smtp", fmt.Sprintf("127.0.0.1:%d", port),
 			"--listen", fmt.Sprintf("127.0.0.1:%d", uiPort),
-			"--db-file", dbFile,
+			"--database", dbFile,
 		},
 	}
 
