@@ -243,16 +243,7 @@ func BuildServiceCmd(ctx context.Context, svc config.ServiceConfig, binPath, pro
 		)
 
 	case "mailpit":
-		uiPort := svc.UIPort
-		if uiPort == 0 {
-			uiPort = 8025
-		}
-		dbFile := filepath.Join(dataDir, "mailpit.db")
-		spec.Args = []string{
-			"--smtp-listen", fmt.Sprintf("127.0.0.1:%d", svc.Port),
-			"--listen", fmt.Sprintf("127.0.0.1:%d", uiPort),
-			"--db-file", dbFile,
-		}
+		return BuildMailpitCmd(binPath, svc, projectDir)
 
 	default:
 		return SpecCmd{}, fmt.Errorf("unsupported service %q", svc.Name)

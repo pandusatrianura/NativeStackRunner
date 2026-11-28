@@ -41,6 +41,7 @@ type Supervisor struct {
 	binaryMgr    *binary.Manager
 	executor     ProcessExecutor
 	outputWriter io.Writer
+	outMu        sync.Mutex
 	cmdRunner    CmdRunner
 	httpClient   HTTPClient
 }
@@ -72,6 +73,18 @@ func (s *Supervisor) SetCmdRunner(r CmdRunner) {
 // SetHTTPClient sets the HTTP client for S3/API provisioning helpers.
 func (s *Supervisor) SetHTTPClient(c HTTPClient) {
 	s.httpClient = c
+}
+
+func (s *Supervisor) writeOutput(format string, a ...interface{}) {
+	s.outMu.Lock()
+	defer s.outMu.Unlock()
+	_, _ = fmt.Fprintf(s.outputWriter, format, a...)
+}
+
+func (s *Supervisor) writeOutputLine(a ...interface{}) {
+	s.outMu.Lock()
+	defer s.outMu.Unlock()
+	_, _ = fmt.Fprintln(s.outputWriter, a...)
 }
 
 // RunningStack represents an actively managed set of background processes in a stack.
@@ -193,7 +206,7 @@ func (s *Supervisor) StartAsync(parentCtx context.Context) (*RunningStack, error
 
 		// 4. Save PID
 		if err := SavePID(pidsDir, name, handle.PID()); err != nil {
-			_, _ = fmt.Fprintf(s.outputWriter, "Warning: failed to save PID for %s: %v\n", name, err)
+			s.writeOutput("Warning: failed to save PID for %s: %v\n", name, err)
 		}
 
 		// 5. Pipe logs
@@ -297,7 +310,7 @@ func (s *Supervisor) StartDetached(ctx context.Context) ([]DetachedServiceInfo, 
 
 		// 5. Save PID
 		if err := SavePID(pidsDir, name, handle.PID()); err != nil {
-			_, _ = fmt.Fprintf(s.outputWriter, "Warning: failed to save PID for %s: %v\n", name, err)
+			s.writeOutput("Warning: failed to save PID for %s: %v\n", name, err)
 		}
 
 		startedServices = append(startedServices, DetachedServiceInfo{
@@ -331,19 +344,19 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	}
 	defer stack.Stop()
 
-	_, _ = fmt.Fprintf(s.outputWriter, "\nAll services launched successfully in project %s.\nPress Ctrl+C to stop.\n\n", s.projectDir)
+	s.writeOutput("\nAll services launched successfully in project %s.\nPress Ctrl+C to stop.\n\n", s.projectDir)
 
 	// Post-startup provisioning (e.g. creating custom databases or buckets)
 	go s.postStartProvision(ctx, stack.binPaths)
 
 	select {
 	case <-ctx.Done():
-		_, _ = fmt.Fprintln(s.outputWriter, "\nShutting down services gracefully...")
+		s.writeOutputLine("\nShutting down services gracefully...")
 		return nil
 
 	case exit := <-stack.exitCh:
 		errMsg := fmt.Sprintf("\n[ERROR] Service %q terminated unexpectedly (exit: %v). Shutting down all services...", exit.service, exit.err)
-		_, _ = fmt.Fprintln(s.outputWriter, errMsg)
+		s.writeOutputLine(errMsg)
 		return fmt.Errorf("service %q terminated unexpectedly: %w", exit.service, exit.err)
 	}
 }
@@ -354,21 +367,21 @@ func (s *Supervisor) postStartProvision(ctx context.Context, binPaths map[string
 		if name == "postgres" && svc.Database != "" && svc.Database != "postgres" {
 			targetAddr := fmt.Sprintf("127.0.0.1:%d", svc.Port)
 			if err := WaitForTCPReady(ctx, targetAddr, 10*time.Second); err != nil {
-				_, _ = fmt.Fprintf(s.outputWriter, "[postgres | %d] Warning: timeout waiting for database connection: %v\n", svc.Port, err)
+				s.writeOutput("[postgres | %d] Warning: timeout waiting for database connection: %v\n", svc.Port, err)
 				continue
 			}
 			binPath := binPaths[name]
 			if err := EnsurePostgresDatabase(ctx, s.cmdRunner, binPath, svc.Port, svc.User, svc.Database, s.projectDir); err != nil {
-				_, _ = fmt.Fprintf(s.outputWriter, "[postgres | %d] Warning: auto-creating database %q: %v\n", svc.Port, svc.Database, err)
+				s.writeOutput("[postgres | %d] Warning: auto-creating database %q: %v\n", svc.Port, svc.Database, err)
 			} else {
-				_, _ = fmt.Fprintf(s.outputWriter, "[postgres | %d] Database %q verified/created.\n", svc.Port, svc.Database)
+				s.writeOutput("[postgres | %d] Database %q verified/created.\n", svc.Port, svc.Database)
 			}
 		}
 
 		if name == "minio" && len(svc.Buckets) > 0 {
 			targetAddr := fmt.Sprintf("127.0.0.1:%d", svc.Port)
 			if err := WaitForTCPReady(ctx, targetAddr, 10*time.Second); err != nil {
-				_, _ = fmt.Fprintf(s.outputWriter, "[minio | %d] Warning: timeout waiting for MinIO connection: %v\n", svc.Port, err)
+				s.writeOutput("[minio | %d] Warning: timeout waiting for MinIO connection: %v\n", svc.Port, err)
 				continue
 			}
 			endpoint := fmt.Sprintf("http://127.0.0.1:%d", svc.Port)
@@ -382,9 +395,9 @@ func (s *Supervisor) postStartProvision(ctx context.Context, binPaths map[string
 			}
 			for _, b := range svc.Buckets {
 				if err := EnsureMinIOBucket(ctx, s.httpClient, endpoint, user, secret, b); err != nil {
-					_, _ = fmt.Fprintf(s.outputWriter, "[minio | %d] Warning: auto-creating bucket %q: %v\n", svc.Port, b, err)
+					s.writeOutput("[minio | %d] Warning: auto-creating bucket %q: %v\n", svc.Port, b, err)
 				} else {
-					_, _ = fmt.Fprintf(s.outputWriter, "[minio | %d] S3 Bucket %q verified/created.\n", svc.Port, b)
+					s.writeOutput("[minio | %d] S3 Bucket %q verified/created.\n", svc.Port, b)
 				}
 			}
 		}
@@ -455,6 +468,6 @@ func (s *Supervisor) pipeLog(r io.Reader, prefix string, wg *sync.WaitGroup) {
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
-		_, _ = fmt.Fprintf(s.outputWriter, "%s%s\n", prefix, line)
+		s.writeOutput("%s%s\n", prefix, line)
 	}
 }
