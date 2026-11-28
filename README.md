@@ -6,6 +6,10 @@ NativeStackRunner is an open-source command-line tool built with Go that provisi
 [![Go Report Card](https://goreportcard.com/badge/github.com/pandusatrianura/NativeStackRunner)](https://goreportcard.com/report/github.com/pandusatrianura/NativeStackRunner)
 [![Release](https://img.shields.io/github/v/release/pandusatrianura/NativeStackRunner)](https://github.com/pandusatrianura/NativeStackRunner/releases)
 
+<p align="center">
+  <img src="assets/demo.gif" alt="NativeStackRunner Terminal Demo" width="800">
+</p>
+
 ---
 
 ## Why NativeStackRunner?
@@ -286,17 +290,14 @@ We welcome contributions from everyone! To get started:
 - Review our [Security Policy](SECURITY.md) for vulnerability disclosure.
 - Submit bug reports and feature requests using our [GitHub Issue Templates](https://github.com/pandusatrianura/NativeStackRunner/issues/new/choose).
 
-### Roadmap
+### Roadmap & Community Discussion ("What would you like next?")
 
 - **v1.0 GA:** PostgreSQL 14–16, Redis / Dragonfly, MinIO S3, and `stack exec` test runner.
-- **v1.1 (Current):** Detached Mode (`stack up -d`), Mailpit mock SMTP server + Web UI, and 100% Community Health standard.
-- **v1.2 (Planned):** Standalone MySQL / MariaDB support.
-
----
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
+- **v1.1 (Current):** Detached Mode (`stack up -d`), Mailpit mock SMTP server + Web UI, and 100% Community Health standards.
+- **v1.2 (Planned & Community Wishlist):**
+  - `stack logs [-f, --follow] [service]`: Stream live service logs directly from the terminal without inspecting `.stack/logs/` manually.
+  - `stack restart [service]`: Gracefully restart a specific service without tearing down the entire stack.
+  - **Standalone MySQL / MariaDB Engine**: Native standalone binary support for MySQL (port 3306).
 
 ---
 

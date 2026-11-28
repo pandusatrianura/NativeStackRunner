@@ -1,0 +1,41 @@
+name: Render Terminal Demo
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'assets/demo.tape'
+
+jobs:
+  vhs:
+    name: Generate demo.gif via VHS
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build stack CLI and prepare stack.yaml
+        run: |
+          go build -o /usr/local/bin/stack ./cmd/stack
+          cp examples/stack.yaml ./stack.yaml
+
+      - name: Setup VHS
+        uses: charmbracelet/vhs-action@v1
+        with:
+          path: 'assets/demo.tape'
+
+      - name: Commit & Push demo.gif
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add assets/demo.gif
+          git diff --quiet && git diff --staged --quiet || (git commit -m "docs: auto-generate demo.gif via VHS" && git push origin main)

@@ -1,5 +1,5 @@
 # VHS Tape for NativeStackRunner (NSR) Terminal Demo
-# Generate GIF with: vhs < assets/demo.tape
+# Generate GIF with: vhs assets/demo.tape
 
 Output assets/demo.gif
 
@@ -14,7 +14,7 @@ Type "# 🚀 NativeStackRunner: Sub-second dependencies without Docker"
 Enter
 Sleep 1s
 
-Type "stack up"
+Type "stack up -d"
 Enter
 Sleep 4s
 
@@ -30,7 +30,7 @@ Type "# ⚡ Run ephemeral CI/CD tests with automatic teardown:"
 Enter
 Sleep 500ms
 
-Type "stack exec -- npm test"
+Type "stack exec -- go test ./..."
 Enter
 Sleep 4s
 
