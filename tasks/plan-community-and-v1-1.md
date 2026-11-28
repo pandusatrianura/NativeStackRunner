@@ -1,92 +1,172 @@
-# Implementation Plan: Community Health, Visual Showcase & NSR v1.1
+# Implementation Plan: GitHub 100% Community Health, Visual Showcase, & NSR v1.1 Features
 
-> **Tracking Spec:** [tasks/spec-community-and-v1-1.md](file:///e:/github/pandusatrianura/NativeStackRunner/tasks/spec-community-and-v1-1.md)  
-> **Workflow Phase:** Phase 2 & 3 (Plan & Tasks)
+> **Tracking:** `tasks/plan-community-and-v1-1.md`  
+> **Based on Spec:** `tasks/spec-community-and-v1-1.md`  
+> **Target Releases:** v1.0.1 (Community & Visuals) & v1.1.0 (Detached Mode & Mailpit)
 
 ---
 
-## Work Packets & Dependencies
+## 1. Overview
 
-```mermaid
-flowchart TD
-    subgraph P1["Phase 1: Community Health & Visuals"]
-        T1["Task 1: Issue Templates"] --> T3["Task 3: Security & Contributing Docs"]
-        T2["Task 2: VHS Tape Asset"] --> T3
-    end
+This implementation plan decomposes the work into small, verifiable vertical slices. The work is organized into three distinct phases:
+1. **Phase 1: Repository Health & Visual Polish:** Deliver GitHub 100% Community Standards compliance and Charm VHS terminal demo recording.
+2. **Phase 2: Detached Execution Engine (`stack up -d`):** Free the terminal for developers by launching background services, waiting for TCP readiness, and gracefully handing off control to `stack status` and `stack down`.
+3. **Phase 3: Mailpit Integration (4th Core Dependency):** Expand the Golden Trio to include mock SMTP email testing and Web UI with zero external dependencies.
 
-    subgraph P2["Phase 2: Detached Mode (-d)"]
-        T4["Task 4: Resolve -d flag in root.go"] --> T5["Task 5: Implement stack up -d in up.go"]
-        T5 --> T6["Task 6: Detached mode tests"]
-    end
+---
 
-    subgraph P3["Phase 3: Mailpit Integration"]
-        T7["Task 7: Binary Manifest & Checksums"] --> T8["Task 8: Config & Environment variables"]
-        T8 --> T9["Task 9: Mailpit Runner & Supervisor Wiring"]
-        T9 --> T10["Task 10: Mailpit Unit & Integration Tests"]
-    end
+## 2. Architecture Decisions & Dependency Graph
 
-    subgraph P4["Phase 4: Verification & Docs"]
-        T6 --> T11["Task 11: Docs & Examples Update"]
-        T10 --> T11
-        T11 --> T12["Task 12: Full Test Suite & Git Push"]
-    end
+```
+Phase 1: Community & Visuals (Zero Code Impact)
+├── .github/ISSUE_TEMPLATE/*.yml
+├── CONTRIBUTING.md & SECURITY.md
+└── assets/demo.tape
+
+Phase 2: Detached Mode Execution
+├── cmd/stack/root.go (Remap --dir to -C, release -d)
+│       └── cmd/stack/up.go (Add --detach / -d, wire StartAsync + WaitReady)
+│               └── cmd/stack/up_test.go (Unit & CLI tests)
+
+Phase 3: Mailpit Integration
+├── internal/config/config.go & env.go (Schema & Env vars)
+│       └── internal/binary/manifest.go (Multi-platform binary resolver)
+│               └── internal/runner/mailpit.go (Process runner)
+│                       └── internal/runner/supervisor.go (Lifecycle wiring)
+│                               └── Test suites
 ```
 
 ---
 
-## Discrete Task Breakdown
+## 3. Task List & Breakdown
 
-### Task 1: GitHub Issue Templates & Config
-- **Files:**
-  - `.github/ISSUE_TEMPLATE/bug_report.yml`
-  - `.github/ISSUE_TEMPLATE/feature_request.yml`
-  - `.github/ISSUE_TEMPLATE/config.yml`
-- **Acceptance:** GitHub displays structured forms for Bug Reports and Feature Requests.
-- **Verify:** Files conform to GitHub Issue Forms YAML schema.
+### Phase 1: GitHub Community Health & Visual Polish (v1.0.1)
 
-### Task 2: Community Standards Documentation
-- **Files:**
-  - `CONTRIBUTING.md`
-  - `SECURITY.md`
-- **Acceptance:** Clear guidelines for local dev, testing, pull requests, and security disclosures.
-- **Verify:** Files exist and are linked in GitHub Community Standards.
+#### Task 1: GitHub Issue Forms (`bug_report.yml`, `feature_request.yml`, `config.yml`)
+- **Description:** Create structured GitHub YAML issue forms enabling rich issue submissions with drop-downs for OS, CPU architecture, `stack version`, and `stack.yaml`.
+- **Acceptance Criteria:**
+  - [ ] `.github/ISSUE_TEMPLATE/bug_report.yml` validates with required OS, version, and log fields.
+  - [ ] `.github/ISSUE_TEMPLATE/feature_request.yml` includes problem, proposed solution, and alternatives.
+  - [ ] `.github/ISSUE_TEMPLATE/config.yml` defines community contact links.
+- **Verification:** Inspect YAML syntax validity with `Get-Content` and schema validation.
+- **Files:** `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/ISSUE_TEMPLATE/feature_request.yml`, `.github/ISSUE_TEMPLATE/config.yml`
+- **Scope:** Small (3 files, documentation/config only).
 
-### Task 3: Terminal Showcase Asset (Charm VHS)
-- **Files:**
-  - `assets/demo.tape`
-- **Acceptance:** VHS tape defines automated recording script demonstrating `stack up` boot speed.
-- **Verify:** Syntax matches Charm VHS specification.
+#### Task 2: Open Source Community Documents (`CONTRIBUTING.md`, `SECURITY.md`)
+- **Description:** Author comprehensive contributor guidelines and security vulnerability disclosure policy.
+- **Acceptance Criteria:**
+  - [ ] `CONTRIBUTING.md` details local development setup, `go test` workflows, code idioms, and PR conventions.
+  - [ ] `SECURITY.md` defines supported versions and private vulnerability reporting contact.
+- **Verification:** Confirm files exist in repository root.
+- **Files:** `CONTRIBUTING.md`, `SECURITY.md`
+- **Scope:** Small (2 files).
 
-### Task 4: Detached Mode Execution (`stack up -d`)
-- **Files:**
-  - `cmd/stack/root.go`
-  - `cmd/stack/up.go`
-  - `cmd/stack/up_test.go`
-- **Acceptance:**
-  - `rootCmd` flag `--dir` shorthand changed to `-C` (or long-form only) so `-d` is freed for `stack up`.
-  - `stack up -d` / `--detach` starts stack async, waits until all services pass TCP readiness check and custom DBs/buckets are provisioned, prints status summary table, and exits cleanly with code 0 while child processes keep running.
-- **Verify:** Unit tests pass, live execution confirms PIDs remain alive and responsive to `stack status` and `stack down`.
+#### Task 3: Terminal Demo Recording Script (`assets/demo.tape`)
+- **Description:** Create a Charm VHS tape script to generate a high-contrast GIF showing `stack up` booting in < 300ms vs slow container spin-up.
+- **Acceptance Criteria:**
+  - [ ] `assets/demo.tape` includes setup commands, typing emulation, and output pausing.
+- **Verification:** Script syntax check.
+- **Files:** `assets/demo.tape`
+- **Scope:** XS (1 file).
 
-### Task 5: Mailpit Engine Integration
-- **Files:**
-  - `internal/binary/manifest.go`
-  - `internal/config/config.go`
-  - `internal/config/env.go`
-  - `internal/config/env_test.go`
-  - `internal/runner/mailpit.go`
-  - `internal/runner/mailpit_test.go`
-  - `internal/runner/supervisor.go`
-  - `internal/runner/supervisor_test.go`
-- **Acceptance:**
-  - Mailpit v1.21.8+ binary URLs and SHA-256 registered for Windows, Linux, macOS.
-  - `stack.yaml` accepts `services.mailpit` with `port: 1025` and `ui_port: 8025`.
-  - `stack env` injects `SMTP_HOST=localhost`, `SMTP_PORT=1025`, `MAILPIT_URL=http://localhost:8025`.
-  - Supervisor boots Mailpit with `--smtp-listen` and `--listen`, waits TCP health, pipes logs.
-- **Verify:** Unit tests pass with 100% coverage on new methods.
+---
 
-### Task 6: Documentation & Validation
-- **Files:**
-  - `examples/stack.yaml`
-  - `README.md`
-- **Acceptance:** Updated documentation includes `stack up -d` and `mailpit` reference.
-- **Verify:** `go test -v ./...` and `go vet ./...` pass with 0 errors.
+### Checkpoint 1: Community Health Verification
+- [ ] Confirm all community standard files (`README.md`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, Issue Templates, PR Template) exist.
+- [ ] Git commit and push to remote.
+
+---
+
+### Phase 2: Detached Execution Engine (stack up -d)
+
+#### Task 4: Reclaim Flag Shorthand `-d` on `rootCmd`
+- **Description:** Remap `rootCmd` flag `--dir` from shorthand `-d` to `-C` (matching standard `git -C` / `make -C`), freeing `-d` for `--detach` on `stack up`.
+- **Acceptance Criteria:**
+  - [ ] `stack --help` displays `-C, --dir string`.
+  - [ ] Existing `--dir` long-form continues to work seamlessly.
+- **Verification:** Run `go test ./cmd/stack/...` and verify help output.
+- **Files:** `cmd/stack/root.go`
+- **Scope:** XS (1 file).
+
+#### Task 5: Implement Detached Mode in `cmd/stack/up.go`
+- **Description:** Add `--detach, -d` flag to `stack up`. When set, launch the stack using `supervisor.StartAsync(ctx)`, block synchronously on `stack.WaitReady(ctx, 30*time.Second)`, print connection summary, and exit with code 0 while child processes run in the background.
+- **Acceptance Criteria:**
+  - [ ] `stack up -d` boots services, writes PIDs to `.stack/pids/`, and exits without terminating child processes.
+  - [ ] `stack status` detects active running services and PIDs.
+  - [ ] `stack down` terminates background processes cleanly.
+- **Verification:** CLI smoke test with `stack up -d`, `stack status`, `stack down`.
+- **Files:** `cmd/stack/up.go`
+- **Scope:** S (1-2 files).
+
+#### Task 6: Unit and CLI Tests for Detached Mode
+- **Description:** Add unit tests validating detached mode flag parsing, readiness waiting, and non-blocking exit.
+- **Acceptance Criteria:**
+  - [ ] Test validates `--detach` flag initiates async startup and calls `WaitReady`.
+  - [ ] Test validates that unexpected child crash during detached startup triggers error and rollback.
+- **Verification:** `go test -v ./cmd/stack/... -run TestUpCommand`
+- **Files:** `cmd/stack/up_test.go`
+- **Scope:** S (1 file).
+
+---
+
+### Checkpoint 2: Detached Mode Verification
+- [ ] `go test -v ./...` passes 100%.
+- [ ] Live execution of `stack up -d` -> `stack status` -> `stack down` runs cleanly.
+
+---
+
+### Phase 3: Mailpit Service Integration (v1.1.0)
+
+#### Task 7: Configuration Schema & Environment Injection for Mailpit
+- **Description:** Add `MailpitConfig` struct to `internal/config/config.go` with ports (default SMTP 1025, Web UI 8025). Add `SMTP_HOST`, `SMTP_PORT`, `MAILPIT_URL` to `internal/config/env.go`.
+- **Acceptance Criteria:**
+  - [ ] `stack.yaml` parses `services.mailpit.port` and `services.mailpit.ui_port`.
+  - [ ] `BuildEnvironment` injects `SMTP_PORT=1025` and `MAILPIT_URL=http://localhost:8025`.
+- **Verification:** `go test -v ./internal/config/...`
+- **Files:** `internal/config/config.go`, `internal/config/config_test.go`, `internal/config/env.go`, `internal/config/env_test.go`
+- **Scope:** S (4 files).
+
+#### Task 8: Mailpit Binary Resolver & SHA-256 Checksums
+- **Description:** Add Mailpit official release download URLs and verified SHA-256 checksums to `internal/binary/manifest.go` for Linux, macOS, and Windows (amd64/arm64).
+- **Acceptance Criteria:**
+  - [ ] `manifest.go` defines `mailpit` binary spec with official tar.gz/zip URLs from `github.com/axllent/mailpit`.
+- **Verification:** `go test -v ./internal/binary/...`
+- **Files:** `internal/binary/manifest.go`
+- **Scope:** XS (1 file).
+
+#### Task 9: Mailpit Runner Process Builder & Supervisor Wiring
+- **Description:** Create `internal/runner/mailpit.go` to construct the CLI invocation (`mailpit --smtp-listen 127.0.0.1:1025 --listen 127.0.0.1:8025`). Wire into `Supervisor.StartAsync`.
+- **Acceptance Criteria:**
+  - [ ] `BuildMailpitCmd` produces exact flag arguments.
+  - [ ] Supervisor manages Mailpit lifecycle, logs, and PID tracking.
+  - [ ] Preflight port validator checks Mailpit SMTP and UI ports.
+- **Verification:** `go test -v ./internal/runner/...`
+- **Files:** `internal/runner/mailpit.go`, `internal/runner/mailpit_test.go`, `internal/runner/supervisor.go`
+- **Scope:** M (3 files).
+
+#### Task 10: Update Examples and Documentation for Mailpit
+- **Description:** Update `examples/stack.yaml` and `README.md` to document the mailpit service configuration and default environment variables.
+- **Acceptance Criteria:**
+  - [ ] `examples/stack.yaml` contains sample `mailpit` service block.
+  - [ ] `README.md` lists Mailpit under Supported Services and CLI reference.
+- **Verification:** Linting and manual review.
+- **Files:** `examples/stack.yaml`, `README.md`
+- **Scope:** S (2 files).
+
+---
+
+### Checkpoint 3: Complete v1.1.0 Verification
+- [ ] `go test -v ./...` passes 100% across all packages.
+- [ ] `go vet ./...` reports 0 issues.
+- [ ] `stack exec -c examples/stack.yaml -- go test ./...` verifies Golden Trio + Mailpit live execution.
+- [ ] Tag `v1.1.0` ready to ship.
+
+---
+
+## 4. Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+| :--- | :---: | :--- |
+| **Breaking `--dir` CLI flag shorthand** | Low | Only the single-letter shorthand `-d` changes to `-C`; the full `--dir` flag remains 100% backward compatible. |
+| **Mailpit port collision (1025/8025)** | Medium | Preflight port checker (`ValidateServicePorts`) automatically catches collisions before starting any service. |
+| **Process leak on detached mode** | High | PIDs are persistently stored in `.stack/pids/mailpit.pid` and `stack down` guarantees termination via signal forwarding. |
