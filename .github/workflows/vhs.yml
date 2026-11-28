@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -28,10 +30,29 @@ jobs:
           go build -o /usr/local/bin/stack ./cmd/stack
           cp examples/stack.yaml ./stack.yaml
 
-      - name: Setup VHS
-        uses: charmbracelet/vhs-action@v1
-        with:
-          path: 'assets/demo.tape'
+      - name: Pre-cache binaries for instant demo recording
+        run: |
+          stack up -d
+          stack down
+
+      - name: Install ttyd, VHS and fonts
+        run: |
+          # Install JetBrains Mono font
+          sudo apt-get update && sudo apt-get install -y fonts-jetbrains-mono
+
+          # Install ttyd standalone binary
+          sudo curl -fsSL -o /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64
+          sudo chmod +x /usr/local/bin/ttyd
+
+          # Install VHS standalone binary (ffmpeg & Chrome are pre-installed on ubuntu-latest)
+          curl -fsSL -o /tmp/vhs.tar.gz https://github.com/charmbracelet/vhs/releases/download/v0.12.1/vhs_0.12.1_Linux_x86_64.tar.gz
+          sudo tar -xzf /tmp/vhs.tar.gz --strip-components=1 -C /usr/local/bin vhs_0.12.1_Linux_x86_64/vhs
+          sudo chmod +x /usr/local/bin/vhs
+          rm -f /tmp/vhs.tar.gz
+
+      - name: Render demo.gif via VHS
+        run: |
+          vhs assets/demo.tape
 
       - name: Commit & Push demo.gif
         run: |
